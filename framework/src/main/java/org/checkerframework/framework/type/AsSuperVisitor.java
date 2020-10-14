@@ -603,7 +603,17 @@ public class AsSuperVisitor extends AbstractAtmComboVisitor<AnnotatedTypeMirror,
     private AnnotatedTypeMirror visitTypevar_NotTypevarNorWildcard(
             AnnotatedTypeVariable type, AnnotatedTypeMirror superType, Void p) {
         AnnotatedTypeMirror asSuper = visit(type.getUpperBound(), superType, p);
-        return copyPrimaryAnnos(type, asSuper);
+        for (AnnotationMirror onType : type.getAnnotations()) {
+            AnnotationMirror onSuper = asSuper.getAnnotationInHierarchy(onType);
+            AnnotationMirror result =
+                    onSuper == null
+                            ? onType
+                            : annotatedTypeFactory
+                                    .getQualifierHierarchy()
+                                    .leastUpperBound(onSuper, onType);
+            asSuper.replaceAnnotation(result);
+        }
+        return asSuper;
     }
 
     @Override
@@ -742,10 +752,19 @@ public class AsSuperVisitor extends AbstractAtmComboVisitor<AnnotatedTypeMirror,
             isUninferredTypeArgument = true;
         }
         AnnotatedTypeMirror asSuper = visit(type.getExtendsBound(), superType, p);
+        for (AnnotationMirror onType : type.getAnnotations()) {
+            AnnotationMirror onSuper = asSuper.getAnnotationInHierarchy(onType);
+            AnnotationMirror result =
+                    onSuper == null
+                            ? onType
+                            : annotatedTypeFactory
+                                    .getQualifierHierarchy()
+                                    .leastUpperBound(onSuper, onType);
+            asSuper.replaceAnnotation(result);
+        }
         isUninferredTypeArgument = oldIsUninferredTypeArgument;
         annotatedTypeFactory.addDefaultAnnotations(superType);
-
-        return copyPrimaryAnnos(type, asSuper);
+        return asSuper;
     }
 
     @Override

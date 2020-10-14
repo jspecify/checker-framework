@@ -1576,6 +1576,9 @@ public abstract class AnnotatedTypeMirror {
         // The type of "@Nullable X" has to be "@Nullable X extends @Nullable Object",
         // because otherwise the annotations are inconsistent.
         private void fixupBoundAnnotations() {
+            if (true) {
+                return;
+            }
             if (!this.getAnnotationsField().isEmpty()) {
                 Set<AnnotationMirror> newAnnos = this.getAnnotationsField();
                 if (upperBound != null) {
@@ -1953,6 +1956,9 @@ public abstract class AnnotatedTypeMirror {
         }
 
         private void fixupBoundAnnotations() {
+            if (true) {
+                return;
+            }
             if (!this.getAnnotationsField().isEmpty()) {
                 if (superBound != null) {
                     superBound.replaceAnnotations(this.getAnnotationsField());
