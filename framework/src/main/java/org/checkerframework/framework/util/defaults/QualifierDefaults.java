@@ -845,6 +845,13 @@ public class QualifierDefaults {
                 // Some defaults only apply to the top level type.
                 boolean isTopLevelType = t == type;
                 switch (location) {
+                    case ENUM_CONSTANT:
+                        if (scope != null
+                                && scope.getKind() == ElementKind.ENUM_CONSTANT
+                                && isTopLevelType) {
+                            addAnnotation(t, qual);
+                        }
+                        break;
                     case FIELD:
                         if (scope != null
                                 && scope.getKind() == ElementKind.FIELD
