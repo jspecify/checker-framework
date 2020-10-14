@@ -10,7 +10,6 @@ package org.checkerframework.framework.qual;
  * @see javax.lang.model.element.ElementKind
  */
 public enum TypeUseLocation {
-
     /** Apply default annotations to all unannotated raw types of fields. */
     FIELD,
 
@@ -56,6 +55,8 @@ public enum TypeUseLocation {
      * Apply default annotations to unannotated, but implicit lower bounds: {@code <T>} {@code <?>}.
      */
     IMPLICIT_LOWER_BOUND,
+
+    UNBOUNDED_WILDCARD_UPPER_BOUND,
 
     /**
      * Apply default annotations to unannotated upper bounds: both explicit ones in {@code extends}

@@ -43,6 +43,7 @@ import org.checkerframework.framework.type.GenericAnnotatedTypeFactory;
 import org.checkerframework.framework.type.QualifierHierarchy;
 import org.checkerframework.framework.type.visitor.AnnotatedTypeScanner;
 import org.checkerframework.framework.util.CheckerMain;
+import org.checkerframework.framework.util.defaults.QualifierDefaults.BoundType;
 import org.checkerframework.javacutil.AnnotationBuilder;
 import org.checkerframework.javacutil.AnnotationUtils;
 import org.checkerframework.javacutil.BugInCF;
@@ -961,6 +962,11 @@ public class QualifierDefaults {
                             addAnnotation(t, qual);
                         }
                         break;
+                    case UNBOUNDED_WILDCARD_UPPER_BOUND:
+                        if (boundType == BoundType.UNBOUNDED && isWildcardBound && isUpperBound) {
+                            addAnnotation(t, qual);
+                        }
+                        break;
                     case IMPLICIT_UPPER_BOUND:
                         if (isUpperBound
                                 && boundType.isOneOf(BoundType.UNBOUNDED, BoundType.LOWER)) {
@@ -997,6 +1003,7 @@ public class QualifierDefaults {
                 impl.isLowerBound = false;
                 impl.isUpperBound = false;
                 impl.boundType = BoundType.UNBOUNDED;
+                impl.isWildcardBound = false;
             }
 
             // are we currently defaulting the lower bound of a type variable or wildcard
@@ -1007,6 +1014,8 @@ public class QualifierDefaults {
 
             // the bound type of the current wildcard or type variable being defaulted
             private BoundType boundType = BoundType.UNBOUNDED;
+
+            private boolean isWildcardBound = false;
 
             @Override
             public Void visitTypeVariable(AnnotatedTypeVariable type, AnnotationMirror qual) {
@@ -1042,8 +1051,10 @@ public class QualifierDefaults {
                 final boolean prevIsUpperBound = isUpperBound;
                 final boolean prevIsLowerBound = isLowerBound;
                 final BoundType prevBoundType = boundType;
+                final boolean prevIsWildcardBound = isWildcardBound;
 
                 boundType = getBoundType(boundedType);
+                isWildcardBound = boundedType.getKind() == TypeKind.WILDCARD;
 
                 try {
                     isLowerBound = true;
@@ -1062,6 +1073,7 @@ public class QualifierDefaults {
                     isUpperBound = prevIsUpperBound;
                     isLowerBound = prevIsLowerBound;
                     boundType = prevBoundType;
+                    isWildcardBound = prevIsWildcardBound;
                 }
             }
         }
@@ -1189,12 +1201,11 @@ public class QualifierDefaults {
      *     which its an argument
      */
     public BoundType getWildcardBoundType(final AnnotatedWildcardType annotatedWildcard) {
-
         final WildcardType wildcard = (WildcardType) annotatedWildcard.getUnderlyingType();
 
         final BoundType boundType;
         if (wildcard.isUnbound() && wildcard.bound != null) {
-            boundType = getTypeVarBoundType((TypeParameterElement) wildcard.bound.asElement());
+            boundType = BoundType.UNBOUNDED;
 
         } else {
             // note: isSuperBound will be true for unbounded and lowers, but the unbounded case is
