@@ -577,26 +577,20 @@ public class BoundsInitializer {
             AnnotatedTypeFactory typeFactory = wildcard.atypeFactory;
 
             WildcardType javaWildcardType = wildcard.getUnderlyingType();
-            TypeMirror javaExtendsBound;
+            AnnotatedTypeMirror extendsBound;
             if (javaWildcardType.getExtendsBound() != null) {
                 // If the wildcard type has an extends bound, use it.
-                javaExtendsBound = javaWildcardType.getExtendsBound();
-            } else if (wildcard.getTypeVariable() != null) {
-                // Otherwise use the upper bound of the type variable associated with this wildcard.
-                javaExtendsBound = wildcard.getTypeVariable().getUpperBound();
+                extendsBound =
+                        AnnotatedTypeMirror.createType(
+                                javaWildcardType.getExtendsBound(), typeFactory, false);
             } else {
-                // Otherwise use the upper bound of the java wildcard.
-                javaExtendsBound =
-                        TypesUtils.wildUpperBound(
-                                javaWildcardType, wildcard.atypeFactory.processingEnv);
+                extendsBound = AnnotatedTypeMirror.createTypeOfObject(wildcard.atypeFactory);
             }
 
             if (wildcard.isUninferredTypeArgument()) {
                 rawTypeWildcards.put(wildcard.getTypeVariable(), wildcard.getUnderlyingType());
             }
 
-            AnnotatedTypeMirror extendsBound =
-                    AnnotatedTypeMirror.createType(javaExtendsBound, typeFactory, false);
             wildcard.setExtendsBound(extendsBound);
 
             this.wildcards.put(wildcard.getUnderlyingType(), wildcard);
