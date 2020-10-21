@@ -10,8 +10,6 @@ package org.checkerframework.framework.qual;
  * @see javax.lang.model.element.ElementKind
  */
 public enum TypeUseLocation {
-    ENUM_CONSTANT,
-
     /** Apply default annotations to all unannotated raw types of fields. */
     FIELD,
 
