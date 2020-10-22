@@ -337,16 +337,7 @@ public abstract class CFAbstractValue<V extends CFAbstractValue<V>> implements A
                     }
                 }
             } else {
-                if (hierarchy.isSubtype(a, b)) {
-                    mostSpecific.add(a);
-                } else if (hierarchy.isSubtype(b, a)) {
-                    mostSpecific.add(b);
-                } else {
-                    AnnotationMirror backup = getBackUpAnnoIn(top);
-                    if (backup != null) {
-                        mostSpecific.add(backup);
-                    }
-                }
+                mostSpecific.add(hierarchy.greatestLowerBound(a, b));
             }
         }
 
