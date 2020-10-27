@@ -331,6 +331,9 @@ public class DefaultAnnotatedTypeFormatter implements AnnotatedTypeFormatter {
         public String visitTypeVariable(
                 AnnotatedTypeVariable type, Set<AnnotatedTypeMirror> visiting) {
             StringBuilder sb = new StringBuilder();
+            sb.append(
+                    annoFormatter.formatAnnotationString(
+                            type.getAnnotationsField(), currentPrintInvisibleSetting));
             sb.append(type.actualType);
 
             if (!visiting.contains(type)) {
