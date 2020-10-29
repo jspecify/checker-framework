@@ -3,6 +3,7 @@ package org.checkerframework.common.basetype;
 import com.sun.source.tree.AnnotatedTypeTree;
 import com.sun.source.tree.AnnotationTree;
 import com.sun.source.tree.ArrayAccessTree;
+import com.sun.source.tree.ArrayTypeTree;
 import com.sun.source.tree.AssignmentTree;
 import com.sun.source.tree.CatchTree;
 import com.sun.source.tree.ClassTree;
@@ -13,6 +14,7 @@ import com.sun.source.tree.EnhancedForLoopTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.IdentifierTree;
 import com.sun.source.tree.InstanceOfTree;
+import com.sun.source.tree.IntersectionTypeTree;
 import com.sun.source.tree.LambdaExpressionTree;
 import com.sun.source.tree.MemberReferenceTree;
 import com.sun.source.tree.MemberReferenceTree.ReferenceMode;
@@ -22,6 +24,7 @@ import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.ModifiersTree;
 import com.sun.source.tree.NewArrayTree;
 import com.sun.source.tree.NewClassTree;
+import com.sun.source.tree.ParameterizedTypeTree;
 import com.sun.source.tree.ReturnTree;
 import com.sun.source.tree.ThrowTree;
 import com.sun.source.tree.Tree;
@@ -95,6 +98,7 @@ import org.checkerframework.framework.type.AnnotatedTypeMirror;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedArrayType;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedDeclaredType;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedExecutableType;
+import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedIntersectionType;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedPrimitiveType;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedTypeVariable;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedUnionType;
@@ -1149,7 +1153,49 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
         for (Tree tpb : node.getBounds()) {
             validateTypeOf(tpb);
         }
+
+        if (node.getBounds().size() > 1) {
+            // The upper bound of the type parameter is an intersection
+            AnnotatedTypeVariable type =
+                    (AnnotatedTypeVariable) atypeFactory.getAnnotatedTypeFromTypeTree(node);
+            AnnotatedIntersectionType intersection =
+                    (AnnotatedIntersectionType) type.getUpperBound();
+            checkExplicitAnnotationsOnIntersectionBounds(intersection, node.getBounds());
+        }
+
         return super.visitTypeParameter(node, p);
+    }
+
+    /**
+     * Issues "explicit.annotation.ignored" warning if any explicit annotation on an intersection
+     * bound is not the same as the primary annotation of the given intersection type.
+     *
+     * @param intersection type to use
+     * @param boundTrees trees of {@code intersection} bounds
+     */
+    protected void checkExplicitAnnotationsOnIntersectionBounds(
+            AnnotatedIntersectionType intersection, List<? extends Tree> boundTrees) {
+        for (Tree boundTree : boundTrees) {
+            if (boundTree.getKind() != Tree.Kind.ANNOTATED_TYPE) {
+                continue;
+            }
+            List<? extends AnnotationMirror> explictAnnos =
+                    TreeUtils.annotationsFromTree((AnnotatedTypeTree) boundTree);
+            for (AnnotationMirror explictAnno : explictAnnos) {
+                if (atypeFactory.isSupportedQualifier(explictAnno)) {
+                    AnnotationMirror anno = intersection.getAnnotationInHierarchy(explictAnno);
+                    if (!AnnotationUtils.areSame(anno, explictAnno)) {
+                        checker.reportWarning(
+                                boundTree,
+                                "explicit.annotation.ignored",
+                                explictAnno,
+                                anno,
+                                explictAnno,
+                                anno);
+                    }
+                }
+            }
+        }
     }
 
     // **********************************************************************
@@ -1789,7 +1835,8 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
                     lambdaParameter,
                     functionType.getParameterTypes().get(i),
                     node.getParameters().get(i),
-                    "lambda.param.type.incompatible");
+                    "lambda.param.type.incompatible",
+                    i);
         }
 
         // TODO: Postconditions?
@@ -2207,6 +2254,13 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
             AnnotatedTypeMirror type = atypeFactory.getAnnotatedType(node);
             atypeFactory.getDependentTypesHelper().checkType(type, node.getType());
         }
+
+        if (node.getType().getKind() == Tree.Kind.INTERSECTION_TYPE) {
+            AnnotatedIntersectionType intersection =
+                    (AnnotatedIntersectionType) atypeFactory.getAnnotatedType(node);
+            checkExplicitAnnotationsOnIntersectionBounds(
+                    intersection, ((IntersectionTypeTree) node.getType()).getBounds());
+        }
         return super.visitTypeCast(node, p);
         // return scan(node.getExpression(), p);
     }
@@ -2277,18 +2331,91 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
     }
 
     /**
-     * Checks an annotated type. Invoked by {@link #visitAnnotatedType(AnnotatedTypeTree, Void)} and
-     * also by {@link #visitVariable} and {@link #visitMethod}. Exists to prevent code duplication
-     * between the three. Checking in visitVariable and visitMethod is needed because there isn't an
-     * AnnotatedTypeTree within a variable declaration or for a method return type -- all the
-     * annotations are attached to the VariableTree or MethodTree, respectively.
+     * Checks an annotated type. Invoked by {@link #visitAnnotatedType(AnnotatedTypeTree, Void)},
+     * {@link #visitVariable}, and {@link #visitMethod}. Exists to prevent code duplication among
+     * the three. Checking in {@code visitVariable} and {@code visitMethod} is needed because there
+     * isn't an AnnotatedTypeTree within a variable declaration or for a method return type -- all
+     * the annotations are attached to the VariableTree or MethodTree, respectively.
      *
      * @param annoTrees annotations written before a variable/method declaration, if this type is
      *     from one; null otherwise
      * @param typeTree the type that any type annotations in annoTrees apply to
      */
     public void visitAnnotatedType(
-            @Nullable List<? extends AnnotationTree> annoTrees, Tree typeTree) {}
+            @Nullable List<? extends AnnotationTree> annoTrees, Tree typeTree) {
+        warnAboutIrrelevantJavaTypes(annoTrees, typeTree);
+    }
+
+    /**
+     * Warns if a type annotation is written on a Java type that is not listed in
+     * the @RelevantJavaTypes annotation.
+     *
+     * @param annoTrees annotations written before a variable/method declaration, if this type is
+     *     from one; null otherwise
+     * @param typeTree the type that any type annotations in annoTrees apply to
+     */
+    public void warnAboutIrrelevantJavaTypes(
+            @Nullable List<? extends AnnotationTree> annoTrees, Tree typeTree) {
+        if (atypeFactory.relevantJavaTypes == null) {
+            return;
+        }
+
+        Tree t = typeTree;
+        while (true) {
+            switch (t.getKind()) {
+
+                    // Recurse for compound types whose top level is not at the far left.
+                case ARRAY_TYPE:
+                    t = ((ArrayTypeTree) t).getType();
+                    continue;
+                case MEMBER_SELECT:
+                    t = ((MemberSelectTree) t).getExpression();
+                    continue;
+                case PARAMETERIZED_TYPE:
+                    t = ((ParameterizedTypeTree) t).getType();
+                    continue;
+
+                    // Base cases
+                case PRIMITIVE_TYPE:
+                case IDENTIFIER:
+                    List<AnnotationTree> supportedAnnoTrees = supportedAnnoTrees(annoTrees);
+                    if (!supportedAnnoTrees.isEmpty()
+                            && !atypeFactory.isRelevant(TreeUtils.typeOf(t))) {
+                        checker.reportError(t, "anno.on.irrelevant", supportedAnnoTrees, t);
+                    }
+                    return;
+                case ANNOTATED_TYPE:
+                    AnnotatedTypeTree at = (AnnotatedTypeTree) t;
+                    ExpressionTree underlying = at.getUnderlyingType();
+                    List<AnnotationTree> annos = supportedAnnoTrees(at.getAnnotations());
+                    if (!annos.isEmpty()
+                            && !atypeFactory.isRelevant(TreeUtils.typeOf(underlying))) {
+                        checker.reportError(t, "anno.on.irrelevant", annos, underlying);
+                    }
+                    return;
+
+                default:
+                    return;
+            }
+        }
+    }
+
+    /**
+     * Returns a new list containing only the supported annotations from its argument -- that is,
+     * those that are part of the current type system.
+     *
+     * @param annoTrees annotation trees
+     * @return a new list containing only the supported annotations from its argument
+     */
+    private List<AnnotationTree> supportedAnnoTrees(List<? extends AnnotationTree> annoTrees) {
+        List<AnnotationTree> result = new ArrayList<>(1);
+        for (AnnotationTree at : annoTrees) {
+            if (atypeFactory.isSupportedQualifier(TreeUtils.annotationFromAnnotationTree(at))) {
+                result.add(at);
+            }
+        }
+        return result;
+    }
 
     // **********************************************************************
     // Helper methods to provide a single overriding point
@@ -3610,12 +3737,12 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
                     checker.reportError(
                             overriderTree,
                             "methodref.receiver.invalid",
+                            overriderReceiver,
+                            overriddenReceiver,
                             overriderMeth,
                             overriderTyp,
                             overriddenMeth,
-                            overriddenTyp,
-                            overriderReceiver,
-                            overriddenReceiver);
+                            overriddenTyp);
                 }
                 return success;
             }
@@ -3673,10 +3800,10 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
                         overriderTree,
                         "methodref.receiver.bound.invalid",
                         receiverArg,
-                        overriderMeth,
-                        overriderTyp,
+                        receiverDecl,
                         receiverArg,
-                        receiverDecl);
+                        overriderMeth,
+                        overriderTyp);
             }
 
             return success;
@@ -3712,12 +3839,12 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
                 checker.reportError(
                         overriderTree,
                         "override.receiver.invalid",
+                        pair.found,
+                        pair.required,
                         overriderMeth,
                         overriderTyp,
                         overriddenMeth,
-                        overriddenTyp,
-                        pair.found,
-                        pair.required);
+                        overriddenTyp);
                 return false;
             }
             return true;
@@ -3802,12 +3929,12 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
                         posTree,
                         msgKey,
                         overrider.getElement().getParameters().get(index).toString(),
+                        pair.found,
+                        pair.required,
                         overriderMeth,
                         overriderTyp,
                         overriddenMeth,
-                        overriddenTyp,
-                        pair.found,
-                        pair.required);
+                        overriddenTyp);
             }
         }
 
@@ -3888,12 +4015,12 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
                 checker.reportError(
                         posTree,
                         msgKey,
+                        pair.found,
+                        pair.required,
                         overriderMeth,
                         overriderTyp,
                         overriddenMeth,
-                        overriddenTyp,
-                        pair.found,
-                        pair.required);
+                        overriddenTyp);
             }
         }
     }
@@ -4063,38 +4190,48 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
 
         AnnotatedTypeMirror receiver = atypeFactory.getReceiverType(tree);
 
-        if (!isAccessAllowed(elem, receiver, tree)) {
-            checker.reportError(node, "unallowed.access", elem, receiver);
-        }
+        checkAccessAllowed(elem, receiver, tree);
     }
 
     /**
-     * Returns true if access is allowed, based on an @Unused annotation
+     * Issues an error if access not allowed, based on an @Unused annotation.
      *
-     * @param field the field to be accessed, whose declaration might be annotated by @Unused
-     * @param receiver the expression whose field is accessed
+     * @param field the field to be accessed, whose declaration might be annotated by @Unused. It
+     *     can also be (for example) {@code this}, in which case {@code receiver} is null.
+     * @param receiverType the type of the expression whose field is accessed
      * @param accessTree the access expression
-     * @return true if access is allowed
      */
-    protected boolean isAccessAllowed(
-            Element field, AnnotatedTypeMirror receiver, @FindDistinct ExpressionTree accessTree) {
+    protected void checkAccessAllowed(
+            Element field,
+            AnnotatedTypeMirror receiverType,
+            @FindDistinct ExpressionTree accessTree) {
         AnnotationMirror unused = atypeFactory.getDeclAnnotation(field, Unused.class);
         if (unused == null) {
-            return true;
+            return;
         }
 
         String when = AnnotationUtils.getElementValueClassName(unused, "when", false).toString();
-        if (!AnnotationUtils.containsSameByName(receiver.getAnnotations(), when)) {
-            return true;
+
+        // TODO: Don't just look at the receiver type, but at the declaration annotations on the
+        // receiver.  (That will enable handling type annotations that are not part of the type
+        // system being checked.)
+
+        // TODO: This requires exactly the same type qualifier, but it should permit subqualifiers.
+        if (!AnnotationUtils.containsSameByName(receiverType.getAnnotations(), when)) {
+            return;
         }
 
         Tree tree = this.enclosingStatement(accessTree);
 
-        // assigning unused to null is OK
-        return (tree != null
+        if (tree != null
                 && tree.getKind() == Tree.Kind.ASSIGNMENT
                 && ((AssignmentTree) tree).getVariable() == accessTree
-                && ((AssignmentTree) tree).getExpression().getKind() == Tree.Kind.NULL_LITERAL);
+                && ((AssignmentTree) tree).getExpression().getKind() == Tree.Kind.NULL_LITERAL) {
+            // Assigning unused to null is OK.
+            return;
+        }
+
+        checker.reportError(accessTree, "unallowed.access", field, receiverType);
     }
 
     /**
