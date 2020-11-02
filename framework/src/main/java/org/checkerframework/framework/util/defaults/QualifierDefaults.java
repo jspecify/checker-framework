@@ -14,6 +14,7 @@ import com.sun.tools.javac.code.Type.WildcardType;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -42,7 +43,6 @@ import org.checkerframework.framework.type.GenericAnnotatedTypeFactory;
 import org.checkerframework.framework.type.QualifierHierarchy;
 import org.checkerframework.framework.type.visitor.AnnotatedTypeScanner;
 import org.checkerframework.framework.util.CheckerMain;
-import org.checkerframework.framework.util.defaults.QualifierDefaults.BoundType;
 import org.checkerframework.javacutil.AnnotationBuilder;
 import org.checkerframework.javacutil.AnnotationUtils;
 import org.checkerframework.javacutil.BugInCF;
@@ -329,13 +329,13 @@ public class QualifierDefaults {
     }
 
     private void checkDuplicates(
-            DefaultSet previousDefaults, AnnotationMirror newAnno, TypeUseLocation newLoc) {
-        if (conflictsWithExistingDefaults(previousDefaults, newAnno, newLoc)) {
-            throw new BugInCF(
-                    "Only one qualifier from a hierarchy can be the default. Existing: "
-                            + previousDefaults
-                            + " and new: "
-                            + new Default(newAnno, newLoc));
+            DefaultSet previousDefaults,
+            @SuppressWarnings("unused") AnnotationMirror newAnno,
+            TypeUseLocation newLoc) {
+        for (Iterator<Default> i = previousDefaults.iterator(); i.hasNext(); ) {
+            if (i.next().location == newLoc) {
+                i.remove();
+            }
         }
     }
 
@@ -500,6 +500,7 @@ public class QualifierDefaults {
     }
 
     // dq must be an AnnotationMirror that represent a @DefaultQualifier
+    @SuppressWarnings("unused")
     private DefaultSet fromDefaultQualifier(AnnotationMirror dq) {
         @SuppressWarnings("unchecked")
         Name cls = AnnotationUtils.getElementValueClassName(dq, "value", false);
@@ -585,60 +586,19 @@ public class QualifierDefaults {
             return elementDefaults.get(elt);
         }
 
-        DefaultSet qualifiers = null;
+        DefaultSet parentDefaults =
+                elt.getKind() == ElementKind.PACKAGE
+                        ? DefaultSet.EMPTY
+                        : defaultsAt(elt.getEnclosingElement());
 
-        {
-            AnnotationMirror d = atypeFactory.getDeclAnnotation(elt, DefaultQualifier.class);
-
-            if (d != null) {
-                qualifiers = new DefaultSet();
-                Set<Default> p = fromDefaultQualifier(d);
-
-                if (p != null) {
-                    qualifiers.addAll(p);
-                }
-            }
-        }
-
-        {
-            AnnotationMirror ds = atypeFactory.getDeclAnnotation(elt, DefaultQualifier.List.class);
-            if (ds != null) {
-                if (qualifiers == null) {
-                    qualifiers = new DefaultSet();
-                }
-                @SuppressWarnings("unchecked") // unchecked conversion to generic type
-                List<AnnotationMirror> values =
-                        AnnotationUtils.getElementValue(ds, "value", List.class, false);
-                for (AnnotationMirror d : values) {
-                    Set<Default> p = fromDefaultQualifier(d);
-                    if (p != null) {
-                        qualifiers.addAll(p);
-                    }
-                }
-            }
-        }
-
-        Element parent;
-        if (elt.getKind() == ElementKind.PACKAGE) {
-            parent = ElementUtils.parentPackage((PackageElement) elt, elements);
-        } else {
-            parent = elt.getEnclosingElement();
-        }
-
-        DefaultSet parentDefaults = defaultsAt(parent);
-        if (qualifiers == null || qualifiers.isEmpty()) {
-            qualifiers = parentDefaults;
-        } else {
-            qualifiers.addAll(parentDefaults);
-        }
-
-        if (qualifiers != null && !qualifiers.isEmpty()) {
-            elementDefaults.put(elt, qualifiers);
-            return qualifiers;
-        } else {
-            return DefaultSet.EMPTY;
-        }
+        DefaultSet qualifiers = new DefaultSet();
+        qualifiers.addAll(parentDefaults);
+        elementDefaults.put(elt, qualifiers);
+        populateNewDefaults(elt, qualifiers.isEmpty());
+        return qualifiers;
     }
+
+    protected void populateNewDefaults(Element elt, boolean initialDefaultsAreEmpty) {}
 
     /**
      * Given an element, returns whether the conservative default should be applied for it. Handles
@@ -727,6 +687,11 @@ public class QualifierDefaults {
         return new DefaultApplierElement(atypeFactory, annotationScope, type, applyToTypeVar);
     }
 
+    protected boolean shouldAnnotateOtherwiseNonDefaultableTypeVariable(
+            AnnotationMirror qual, boolean isDeclaration) {
+        return false;
+    }
+
     /** A default applier element. */
     protected class DefaultApplierElement {
 
@@ -784,13 +749,15 @@ public class QualifierDefaults {
 
         /**
          * Returns true if the given qualifier should be applied to the given type. Currently we do
-         * not apply defaults to void types, packages, wildcards, and type variables.
+         * not apply defaults to void types, packages, wildcards, and (usually) type variables.
          *
          * @param type type to which qual would be applied
          * @return true if this application should proceed
          */
         protected boolean shouldBeAnnotated(
-                final AnnotatedTypeMirror type, final boolean applyToTypeVar) {
+                final AnnotatedTypeMirror type,
+                final boolean applyToTypeVar,
+                AnnotationMirror qual) {
 
             return !(type == null
                     // TODO: executables themselves should not be annotated
@@ -798,7 +765,10 @@ public class QualifierDefaults {
                     // || type.getKind() == TypeKind.EXECUTABLE
                     || type.getKind() == TypeKind.NONE
                     || type.getKind() == TypeKind.WILDCARD
-                    || (type.getKind() == TypeKind.TYPEVAR && !applyToTypeVar)
+                    || (type.getKind() == TypeKind.TYPEVAR
+                            && !applyToTypeVar
+                            && !shouldAnnotateOtherwiseNonDefaultableTypeVariable(
+                                    qual, type.isDeclaration()))
                     || type instanceof AnnotatedNoType);
         }
 
@@ -822,7 +792,7 @@ public class QualifierDefaults {
 
             @Override
             public Void scan(@FindDistinct AnnotatedTypeMirror t, AnnotationMirror qual) {
-                if (!shouldBeAnnotated(t, t == defaultableTypeVar)) {
+                if (!shouldBeAnnotated(t, t == defaultableTypeVar, qual)) {
                     return super.scan(t, qual);
                 }
 
@@ -879,7 +849,7 @@ public class QualifierDefaults {
 
                             for (AnnotatedTypeMirror atm :
                                     ((AnnotatedExecutableType) t).getParameterTypes()) {
-                                if (shouldBeAnnotated(atm, false)) {
+                                if (shouldBeAnnotated(atm, false, qual)) {
                                     addAnnotation(atm, qual);
                                 }
                             }
@@ -901,7 +871,7 @@ public class QualifierDefaults {
 
                             final AnnotatedDeclaredType receiver =
                                     ((AnnotatedExecutableType) t).getReceiverType();
-                            if (shouldBeAnnotated(receiver, false)) {
+                            if (shouldBeAnnotated(receiver, false, qual)) {
                                 addAnnotation(receiver, qual);
                             }
                         }
@@ -913,7 +883,7 @@ public class QualifierDefaults {
                                 && isTopLevelType) {
                             final AnnotatedTypeMirror returnType =
                                     ((AnnotatedExecutableType) t).getReturnType();
-                            if (shouldBeAnnotated(returnType, false)) {
+                            if (shouldBeAnnotated(returnType, false, qual)) {
                                 addAnnotation(returnType, qual);
                             }
                         }
@@ -925,7 +895,7 @@ public class QualifierDefaults {
                                 && isTopLevelType) {
                             final AnnotatedTypeMirror returnType =
                                     ((AnnotatedExecutableType) t).getReturnType();
-                            if (shouldBeAnnotated(returnType, false)) {
+                            if (shouldBeAnnotated(returnType, false, qual)) {
                                 addAnnotation(returnType, qual);
                             }
                         }
