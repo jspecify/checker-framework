@@ -335,27 +335,6 @@ public class DefaultAnnotatedTypeFormatter implements AnnotatedTypeFormatter {
                     annoFormatter.formatAnnotationString(
                             type.getAnnotationsField(), currentPrintInvisibleSetting));
             sb.append(type.actualType);
-
-            if (!visiting.contains(type)) {
-                if (type.isDeclaration() && currentPrintInvisibleSetting) {
-                    sb.append("/*DECL*/ ");
-                }
-
-                try {
-                    visiting.add(type);
-                    if (currentPrintVerboseGenerics) {
-                        sb.append("[");
-                    }
-                    printBound("extends", type.getUpperBoundField(), visiting, sb);
-                    printBound("super", type.getLowerBoundField(), visiting, sb);
-                    if (currentPrintVerboseGenerics) {
-                        sb.append("]");
-                    }
-
-                } finally {
-                    visiting.remove(type);
-                }
-            }
             return sb.toString();
         }
 
