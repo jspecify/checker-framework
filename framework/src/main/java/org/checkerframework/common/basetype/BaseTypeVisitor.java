@@ -2115,7 +2115,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
         // We cannot do a simple test of casting, as isSubtypeOf requires
         // the input types to be subtypes according to Java.
         if (!calledOnce && !isTypeCastSafe(castType, exprType)) {
-            checker.reportWarning(
+            checker.reportError(
                     typeCastTree, "cast.unsafe", exprType.toString(true), castType.toString(true));
         }
     }
