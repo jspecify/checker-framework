@@ -1229,7 +1229,11 @@ public abstract class SourceChecker extends AbstractTypeProcessor
      * @param messageKey the simple, checker-specific error message key
      * @return the most specific SuppressWarnings string for the warning/error being printed
      */
+    @SuppressWarnings("JdkObsolete") // Error Prone bug, fixed in c7a178a
     private String suppressWarningsString(String messageKey) {
+        if (true) {
+            return getSuppressWarningsPrefixes().first();
+        }
         Collection<String> prefixes = this.getSuppressWarningsPrefixes();
         prefixes.remove(SUPPRESS_ALL_PREFIX);
         if (hasOption("showSuppressWarningsStrings")) {
