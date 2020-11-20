@@ -1158,7 +1158,7 @@ public class QualifierDefaults {
         final WildcardType wildcard = (WildcardType) annotatedWildcard.getUnderlyingType();
 
         final BoundType boundType;
-        if (wildcard.isUnbound() && wildcard.bound != null) {
+        if (wildcard.isUnbound()) {
             boundType = BoundType.UNBOUNDED;
 
         } else {
