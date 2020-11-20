@@ -104,6 +104,7 @@ import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedTypeVari
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedUnionType;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedWildcardType;
 import org.checkerframework.framework.type.AnnotatedTypeParameterBounds;
+import org.checkerframework.framework.type.DefaultTypeHierarchy;
 import org.checkerframework.framework.type.GenericAnnotatedTypeFactory;
 import org.checkerframework.framework.type.QualifierHierarchy;
 import org.checkerframework.framework.type.TypeHierarchy;
@@ -3861,13 +3862,9 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
             boolean result = true;
             for (int i = 0; i < overriderParams.size(); ++i) {
                 boolean success =
-                        atypeFactory
-                                .getTypeHierarchy()
-                                .isSubtype(overriddenParams.get(i), overriderParams.get(i));
-                if (!success) {
-                    success =
-                            testTypevarContainment(overriddenParams.get(i), overriderParams.get(i));
-                }
+                        ((DefaultTypeHierarchy) atypeFactory.getTypeHierarchy())
+                                .publicAreEqualInHierarchy(
+                                        overriddenParams.get(i), overriderParams.get(i));
 
                 checkParametersMsg(success, i, overriderParams, overriddenParams);
                 result &= success;

@@ -327,6 +327,11 @@ public class DefaultTypeHierarchy extends AbstractAtmComboVisitor<Boolean, Void>
         return equalityComparer.areEqualInHierarchy(type1, type2, currentTop);
     }
 
+    public final boolean publicAreEqualInHierarchy(
+            final AnnotatedTypeMirror type1, final AnnotatedTypeMirror type2) {
+        return areEqualInHierarchy(type1, type2);
+    }
+
     /**
      * A declared type is considered a supertype of another declared type only if all of the type
      * arguments of the declared type "contain" the corresponding type arguments of the subtype.
