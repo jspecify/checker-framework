@@ -3333,9 +3333,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
 
         Set<AnnotationMirror> results = AnnotationUtils.createAnnotationSet();
         // Retrieving the annotations from the element.
-        // This includes annotations inherited from superclasses, but not superinterfaces or
-        // overriden methods.
-        List<? extends AnnotationMirror> fromEle = elements.getAllAnnotationMirrors(elt);
+        List<? extends AnnotationMirror> fromEle = elt.getAnnotationMirrors();
         for (AnnotationMirror annotation : fromEle) {
             try {
                 results.add(annotation);
@@ -3379,6 +3377,9 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      */
     private void inheritOverriddenDeclAnnosFromTypeDecl(
             TypeMirror typeMirror, Set<AnnotationMirror> results) {
+        if (true) {
+            return;
+        }
         List<? extends TypeMirror> superTypes = types.directSupertypes(typeMirror);
         for (TypeMirror superType : superTypes) {
             TypeElement elt = TypesUtils.getTypeElement(superType);
@@ -3417,6 +3418,9 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      *     the element itself.
      */
     private void inheritOverriddenDeclAnnos(ExecutableElement elt, Set<AnnotationMirror> results) {
+        if (true) {
+            return;
+        }
         Map<AnnotatedDeclaredType, ExecutableElement> overriddenMethods =
                 AnnotatedTypes.overriddenMethods(elements, this, elt);
 
