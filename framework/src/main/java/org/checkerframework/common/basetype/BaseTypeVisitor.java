@@ -3861,10 +3861,16 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
 
             boolean result = true;
             for (int i = 0; i < overriderParams.size(); ++i) {
-                boolean success =
-                        ((DefaultTypeHierarchy) atypeFactory.getTypeHierarchy())
-                                .publicAreEqualInHierarchy(
-                                        overriddenParams.get(i), overriderParams.get(i));
+                boolean success;
+                if (methodReference) {
+                    success = atypeFactory.getTypeHierarchy()
+                            .isSubtype(overriddenParams.get(i), overriderParams.get(i));
+                } else {
+                    success =
+                            ((DefaultTypeHierarchy) atypeFactory.getTypeHierarchy())
+                                    .publicAreEqualInHierarchy(
+                                            overriddenParams.get(i), overriderParams.get(i));
+                }
 
                 checkParametersMsg(success, i, overriderParams, overriddenParams);
                 result &= success;
