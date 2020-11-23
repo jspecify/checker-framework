@@ -96,6 +96,9 @@ public class DefaultQualifierForUseTypeAnnotator extends TypeAnnotator {
      * <p>Subclass may override to use an annotation other than {@link DefaultQualifierForUse}.
      */
     protected Set<AnnotationMirror> getSupportAnnosFromDefaultQualifierForUses(Element element) {
+        if (true) {
+            return Collections.emptySet();
+        }
         AnnotationMirror defaultQualifier =
                 typeFactory.getDeclAnnotation(element, DefaultQualifierForUse.class);
         if (defaultQualifier == null) {
@@ -109,6 +112,9 @@ public class DefaultQualifierForUseTypeAnnotator extends TypeAnnotator {
      * added.
      */
     protected Set<AnnotationMirror> getHierarchiesNoDefault(Element element) {
+        if (true) {
+            return Collections.emptySet();
+        }
         AnnotationMirror noDefaultQualifier =
                 typeFactory.getDeclAnnotation(element, NoDefaultQualifierForUse.class);
         if (noDefaultQualifier == null) {

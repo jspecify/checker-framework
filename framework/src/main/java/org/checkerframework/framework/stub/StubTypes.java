@@ -310,7 +310,7 @@ public class StubTypes {
      *     appear in a stub file.
      */
     public Set<AnnotationMirror> getDeclAnnotation(Element elt) {
-        if (parsing) {
+        if (false) {
             return Collections.emptySet();
         }
 

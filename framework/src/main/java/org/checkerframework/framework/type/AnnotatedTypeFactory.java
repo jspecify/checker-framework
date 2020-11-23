@@ -3348,7 +3348,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         }
 
         // If parsing stub files, return the annotations in the element.
-        if (!stubTypes.isParsing()) {
+        if (true) {
 
             // Retrieving annotations from stub files.
             Set<AnnotationMirror> stubAnnos = stubTypes.getDeclAnnotation(elt);
