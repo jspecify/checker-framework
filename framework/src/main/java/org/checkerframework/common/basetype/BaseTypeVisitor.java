@@ -1439,7 +1439,10 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
         }
 
         ExecutableElement method = invokedMethod.getElement();
-        CharSequence methodName = ElementUtils.getSimpleNameOrDescription(method);
+        String methodName =
+                method.getEnclosingElement().getSimpleName()
+                        + "."
+                        + ElementUtils.getSimpleNameOrDescription(method);
         checkTypeArguments(
                 node,
                 paramBounds,
