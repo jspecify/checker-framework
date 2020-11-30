@@ -768,7 +768,35 @@ public class QualifierDefaults {
                     || (type.getKind() == TypeKind.TYPEVAR
                             && !applyToTypeVar
                             && !shouldAnnotateOtherwiseNonDefaultableTypeVariable(
-                                    qual, type.isDeclaration()))
+                                    qual,
+                                    /*
+                                     * The type.isDeclaration() check here might not matter. I
+                                     * included it because it seems weird to annotate type-variable
+                                     * declarations, given that we don't normally support that. But
+                                     * I'm not aware of any specific problems that the check here
+                                     * solves, so maybe we should remove it.
+                                     *
+                                     * What *does* matter is the check for constructor return-type
+                                     * type args. Consider the following class:
+                                     *
+                                     * class Foo<T> {
+                                     * 
+                                     * Foo() {}
+                                     *
+                                     * }
+                                     *
+                                     * When looking at its constructor, CF applies defaults to a
+                                     * return type of Foo<T>. This can produce a return type of
+                                     * Foo<@NullnessUnspecified T>. We don't want defaults to apply
+                                     * here.
+                                     *
+                                     * Arguably this second case doesn't fit under the
+                                     * "isDeclaration=true" umbrella. Perhaps we can find a better
+                                     * name -- especially if the actual type.isDeclaration() check
+                                     * isn't needed.
+                                     */
+                                    type.isDeclaration()
+                                            || type == impl.constructorReturnTypeTypeArg))
                     || type instanceof AnnotatedNoType);
         }
 
@@ -970,6 +998,73 @@ public class QualifierDefaults {
             private BoundType boundType = BoundType.UNBOUNDED;
 
             private boolean isWildcardBound = false;
+
+            private AnnotatedTypeMirror constructorReturnType = null;
+
+            private AnnotatedTypeMirror constructorReturnTypeTypeArg = null;
+
+            @Override
+            public Void visitExecutable(
+                    AnnotatedExecutableType type, AnnotationMirror annotationMirror) {
+                // Inlined from supermethod except for constructorReturnType logic.
+                boolean isConstructor =
+                        type.getUnderlyingType().getReturnType().getKind() == TypeKind.VOID
+                                && type.getReturnType().getKind() == TypeKind.DECLARED;
+                Void r;
+                impl.constructorReturnType = isConstructor ? type.getReturnType() : null;
+                try {
+                    r = scan(type.getReturnType(), annotationMirror);
+                } finally {
+                    impl.constructorReturnType = null;
+                }
+                if (type.getReceiverType() != null) {
+                    r = scanAndReduce(type.getReceiverType(), annotationMirror, r);
+                }
+                r = scanAndReduce(type.getParameterTypes(), annotationMirror, r);
+                r = scanAndReduce(type.getThrownTypes(), annotationMirror, r);
+                r = scanAndReduce(type.getTypeVariables(), annotationMirror, r);
+                return r;
+            }
+
+            @Override
+            public Void visitDeclared(
+                    AnnotatedDeclaredType type, AnnotationMirror annotationMirror) {
+                // Inlined from supermethod except for constructorReturnTypeArg logic.
+
+                // Only declared types with type arguments might be recursive,
+                // so only store those.
+                boolean shouldStoreType = !type.getTypeArguments().isEmpty();
+                if (shouldStoreType && this.visitedNodes.containsKey(type)) {
+                    return this.visitedNodes.get(type);
+                }
+                if (shouldStoreType) {
+                    this.visitedNodes.put(type, this.defaultResult);
+                }
+                Void r = this.defaultResult;
+                if (type.getEnclosingType() != null) {
+                    r = scan(type.getEnclosingType(), annotationMirror);
+                    if (shouldStoreType) {
+                        this.visitedNodes.put(type, r);
+                    }
+                }
+
+                boolean isConstructoReturnType = impl.constructorReturnType == type;
+                try {
+                    for (AnnotatedTypeMirror arg : type.getTypeArguments()) {
+                        if (isConstructoReturnType) {
+                            impl.constructorReturnTypeTypeArg = arg;
+                        }
+                        scan(arg, annotationMirror);
+                    }
+                } finally {
+                    impl.constructorReturnTypeTypeArg = null;
+                }
+
+                if (shouldStoreType) {
+                    this.visitedNodes.put(type, r);
+                }
+                return r;
+            }
 
             @Override
             public Void visitTypeVariable(AnnotatedTypeVariable type, AnnotationMirror qual) {
