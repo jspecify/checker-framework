@@ -687,8 +687,7 @@ public class QualifierDefaults {
         return new DefaultApplierElement(atypeFactory, annotationScope, type, applyToTypeVar);
     }
 
-    protected boolean shouldAnnotateOtherwiseNonDefaultableTypeVariable(
-            AnnotationMirror qual, boolean isDeclaration) {
+    protected boolean shouldAnnotateOtherwiseNonDefaultableTypeVariable(AnnotationMirror qual) {
         return false;
     }
 
@@ -767,36 +766,22 @@ public class QualifierDefaults {
                     || type.getKind() == TypeKind.WILDCARD
                     || (type.getKind() == TypeKind.TYPEVAR
                             && !applyToTypeVar
-                            && !shouldAnnotateOtherwiseNonDefaultableTypeVariable(
-                                    qual,
-                                    /*
-                                     * The type.isDeclaration() check here might not matter. I
-                                     * included it because it seems weird to annotate type-variable
-                                     * declarations, given that we don't normally support that. But
-                                     * I'm not aware of any specific problems that the check here
-                                     * solves, so maybe we should remove it.
-                                     *
-                                     * What *does* matter is the check for constructor return-type
-                                     * type args. Consider the following class:
-                                     *
-                                     * class Foo<T> {
-                                     * 
-                                     * Foo() {}
-                                     *
-                                     * }
-                                     *
-                                     * When looking at its constructor, CF applies defaults to a
-                                     * return type of Foo<T>. This can produce a return type of
-                                     * Foo<@NullnessUnspecified T>. We don't want defaults to apply
-                                     * here.
-                                     *
-                                     * Arguably this second case doesn't fit under the
-                                     * "isDeclaration=true" umbrella. Perhaps we can find a better
-                                     * name -- especially if the actual type.isDeclaration() check
-                                     * isn't needed.
-                                     */
-                                    type.isDeclaration()
-                                            || type == impl.constructorReturnTypeTypeArg))
+                            /*
+                             * The type.isDeclaration() check here might not matter. I included it
+                             * because it seems weird to annotate type-variable declarations, given
+                             * that we don't normally support that. But I'm not aware of any
+                             * specific problems that the check here solves, so maybe we should
+                             * remove it.
+                             *
+                             * The other cases below *do* matter, at least in that they affect some
+                             * types I see during debugging. We want to ensure that CF doesn't apply
+                             * defaults to T when looking at the declaration of Foo<T> (and
+                             * similarly for the return type of its constructor). (Were it to apply
+                             * defaults, it could produce the type Foo<@NullnessUnspecified T>.)
+                             */
+                            && (type.isDeclaration()
+                                    || type == impl.typeArgTiedToDeclaration
+                                    || !shouldAnnotateOtherwiseNonDefaultableTypeVariable(qual)))
                     || type instanceof AnnotatedNoType);
         }
 
@@ -1001,7 +986,7 @@ public class QualifierDefaults {
 
             private AnnotatedTypeMirror constructorReturnType = null;
 
-            private AnnotatedTypeMirror constructorReturnTypeTypeArg = null;
+            private AnnotatedTypeMirror typeArgTiedToDeclaration = null;
 
             @Override
             public Void visitExecutable(
@@ -1048,16 +1033,17 @@ public class QualifierDefaults {
                     }
                 }
 
-                boolean isConstructoReturnType = impl.constructorReturnType == type;
+                boolean typeArgsAreTiedToDeclaration =
+                        type.isDeclaration() || impl.constructorReturnType == type;
                 try {
                     for (AnnotatedTypeMirror arg : type.getTypeArguments()) {
-                        if (isConstructoReturnType) {
-                            impl.constructorReturnTypeTypeArg = arg;
+                        if (typeArgsAreTiedToDeclaration) {
+                            impl.typeArgTiedToDeclaration = arg;
                         }
                         scan(arg, annotationMirror);
                     }
                 } finally {
-                    impl.constructorReturnTypeTypeArg = null;
+                    impl.typeArgTiedToDeclaration = null;
                 }
 
                 if (shouldStoreType) {
