@@ -1690,7 +1690,21 @@ public abstract class AnnotatedTypeMirror {
         @Override
         public AnnotatedTypeMirror getErased() {
             // |T extends A&B| = |A|
-            return this.getUpperBound().getErased();
+            AnnotatedTypeMirror result = this.getUpperBound().getErased();
+            // TODO(cpovirk): It would be better to make getUpperBound() correct in the first place.
+            if (!getAnnotationsField().isEmpty()) {
+                if (result.getAnnotationsField().isEmpty()) {
+                    result.addAnnotations(getAnnotationsField());
+                } else {
+                    result.replaceAnnotation(
+                            atypeFactory
+                                    .getQualifierHierarchy()
+                                    .leastUpperBound(
+                                            result.getAnnotationsField().iterator().next(),
+                                            getAnnotationsField().iterator().next()));
+                }
+            }
+            return result;
         }
     }
 
@@ -2015,7 +2029,21 @@ public abstract class AnnotatedTypeMirror {
         @Override
         public AnnotatedTypeMirror getErased() {
             // |? extends A&B| = |A|
-            return getExtendsBound().getErased();
+            AnnotatedTypeMirror result = this.getExtendsBound().getErased();
+            // TODO(cpovirk): It would be better to make getExtendsBound() correct in the first place.
+            if (!getAnnotationsField().isEmpty()) {
+                if (result.getAnnotationsField().isEmpty()) {
+                    result.addAnnotations(getAnnotationsField());
+                } else {
+                    result.replaceAnnotation(
+                            atypeFactory
+                                    .getQualifierHierarchy()
+                                    .leastUpperBound(
+                                            result.getAnnotationsField().iterator().next(),
+                                            getAnnotationsField().iterator().next()));
+                }
+            }
+            return result;
         }
 
         // Remove the uninferredTypeArgument once method type
