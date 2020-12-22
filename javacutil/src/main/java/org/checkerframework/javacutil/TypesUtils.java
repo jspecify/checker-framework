@@ -8,8 +8,10 @@ import com.sun.tools.javac.code.TypeTag;
 import com.sun.tools.javac.model.JavacTypes;
 import com.sun.tools.javac.processing.JavacProcessingEnvironment;
 import com.sun.tools.javac.util.Context;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
@@ -27,14 +29,16 @@ import javax.lang.model.type.WildcardType;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.checkerframework.checker.signature.qual.BinaryName;
 import org.checkerframework.checker.signature.qual.CanonicalNameOrEmpty;
+import org.checkerframework.checker.signature.qual.DotSeparatedIdentifiers;
 import org.checkerframework.checker.signature.qual.FullyQualifiedName;
 import org.plumelib.util.ImmutableTypes;
 
 /** A utility class that helps with {@link TypeMirror}s. */
 public final class TypesUtils {
 
-    /** Class cannot be instantiated */
+    /** Class cannot be instantiated. */
     private TypesUtils() {
         throw new AssertionError("Class TypesUtils cannot be instantiated.");
     }
@@ -82,6 +86,63 @@ public final class TypesUtils {
         return t.getArrayType(componentType);
     }
 
+    /// Creating a Class<?>
+
+    /**
+     * Returns the {@link Class} for a given {@link TypeMirror}. Returns {@code Object.class} if it
+     * cannot determine anything more specific.
+     *
+     * @param typeMirror a TypeMirror
+     * @return the class for {@code typeMirror}
+     */
+    public static Class<?> getClassFromType(TypeMirror typeMirror) {
+
+        switch (typeMirror.getKind()) {
+            case INT:
+                return int.class;
+            case LONG:
+                return long.class;
+            case SHORT:
+                return short.class;
+            case BYTE:
+                return byte.class;
+            case CHAR:
+                return char.class;
+            case DOUBLE:
+                return double.class;
+            case FLOAT:
+                return float.class;
+            case BOOLEAN:
+                return boolean.class;
+
+            case ARRAY:
+                Class<?> componentClass =
+                        getClassFromType(((ArrayType) typeMirror).getComponentType());
+                // In Java 12, use this instead:
+                // return fooClass.arrayType();
+                return java.lang.reflect.Array.newInstance(componentClass, 0).getClass();
+
+            case DECLARED:
+                // BUG: need to compute a @ClassGetName, but this code computes a
+                // @CanonicalNameOrEmpty.  They are different for inner classes.
+                @SuppressWarnings("signature") // https://tinyurl.com/cfissue/658 for Names.toString
+                @DotSeparatedIdentifiers String typeString =
+                        TypesUtils.getQualifiedName((DeclaredType) typeMirror).toString();
+                if (typeString.equals("<nulltype>")) {
+                    return void.class;
+                }
+
+                try {
+                    return Class.forName(typeString);
+                } catch (ClassNotFoundException | UnsupportedClassVersionError e) {
+                    return Object.class;
+                }
+
+            default:
+                return Object.class;
+        }
+    }
+
     /// Getters
 
     /**
@@ -126,6 +187,19 @@ public final class TypesUtils {
     }
 
     /**
+     * Returns the binary name.
+     *
+     * @param type a type
+     * @return the binary name
+     */
+    public static @BinaryName String binaryName(TypeMirror type) {
+        if (type.getKind() != TypeKind.DECLARED) {
+            throw new BugInCF("Only declared types have a binary name");
+        }
+        return ElementUtils.getBinaryName((TypeElement) ((DeclaredType) type).asElement());
+    }
+
+    /**
      * Returns the type element for {@code type} if {@code type} is a class, interface, annotation
      * type, or enum. Otherwise, returns null.
      *
@@ -138,7 +212,7 @@ public final class TypesUtils {
         if (element == null) {
             return null;
         }
-        if (ElementUtils.isClassElement(element)) {
+        if (ElementUtils.isTypeElement(element)) {
             return (TypeElement) element;
         }
         return null;
@@ -313,7 +387,7 @@ public final class TypesUtils {
     }
 
     /**
-     * Returns true iff the argument is a primitive type or a boxed primitive type
+     * Returns true iff the argument is a primitive type or a boxed primitive type.
      *
      * @param type a type
      * @return true if the argument is a primitive type or a boxed primitive type
@@ -836,5 +910,45 @@ public final class TypesUtils {
     public static TypeKindUtils.PrimitiveConversionKind getPrimitiveConversionKind(
             PrimitiveType from, PrimitiveType to) {
         return TypeKindUtils.getPrimitiveConversionKind(from.getKind(), to.getKind());
+    }
+
+    /**
+     * Returns a new type mirror with the same type as {@code type} where all the type variables in
+     * {@code typeVariables} have been substituted with the type arguments in {@code typeArgs}.
+     *
+     * <p>This is a wrapper around {@link com.sun.tools.javac.code.Types#subst(Type,
+     * com.sun.tools.javac.util.List, com.sun.tools.javac.util.List)}.
+     *
+     * @param type type to do substitution in
+     * @param typeVariables type variables that should be replaced with the type mirror at the same
+     *     index of {@code typeArgs}
+     * @param typeArgs type mirrors that should replace the type variable at the same index of
+     *     {@code typeVariables}
+     * @param env processing environment
+     * @return a new type mirror with the same type as {@code type} where all the type variables in
+     *     {@code typeVariables} have been substituted with the type arguments in {@code typeArgs}
+     */
+    public static TypeMirror substitute(
+            TypeMirror type,
+            List<? extends TypeMirror> typeVariables,
+            List<? extends TypeMirror> typeArgs,
+            ProcessingEnvironment env) {
+
+        List<Type> newP = new ArrayList<>();
+        for (TypeMirror typeVariable : typeVariables) {
+            newP.add((Type) typeVariable);
+        }
+
+        List<Type> newT = new ArrayList<>();
+        for (TypeMirror typeMirror : typeArgs) {
+            newT.add((Type) typeMirror);
+        }
+        JavacProcessingEnvironment javacEnv = (JavacProcessingEnvironment) env;
+        com.sun.tools.javac.code.Types types =
+                com.sun.tools.javac.code.Types.instance(javacEnv.getContext());
+        return types.subst(
+                (Type) type,
+                com.sun.tools.javac.util.List.from(newP),
+                com.sun.tools.javac.util.List.from(newT));
     }
 }
