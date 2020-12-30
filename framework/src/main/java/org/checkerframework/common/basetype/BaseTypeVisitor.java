@@ -1843,7 +1843,10 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
             if (ret.getKind() != TypeKind.VOID) {
                 visitorState.setAssignmentContext(Pair.of((Tree) node, ret));
                 commonAssignmentCheck(
-                        ret, (ExpressionTree) node.getBody(), "return.type.incompatible");
+                        ret,
+                        (ExpressionTree) node.getBody(),
+                        "return.type.incompatible",
+                        extraArgForReturnTypeError(node.getBody()));
             }
         }
 
@@ -1908,7 +1911,11 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
             if (ret != null) {
                 visitorState.setAssignmentContext(Pair.of((Tree) node, ret));
 
-                commonAssignmentCheck(ret, node.getExpression(), "return.type.incompatible");
+                commonAssignmentCheck(
+                        ret,
+                        node.getExpression(),
+                        "return.type.incompatible",
+                        extraArgForReturnTypeError(node.getExpression()));
             }
             return super.visitReturn(node, p);
         } finally {
@@ -2788,6 +2795,10 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
                     varType.getKind(),
                     varType.toString());
         }
+    }
+
+    protected String extraArgForReturnTypeError(Tree returnedExpression) {
+        return "";
     }
 
     /**
