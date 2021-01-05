@@ -603,7 +603,7 @@ public class AsSuperVisitor extends AbstractAtmComboVisitor<AnnotatedTypeMirror,
             AnnotationMirror result =
                     onSuper == null
                             ? onType
-                            : annotatedTypeFactory
+                            : atypeFactory
                                     .getQualifierHierarchy()
                                     .leastUpperBound(onSuper, onType);
             asSuper.replaceAnnotation(result);
@@ -751,7 +751,7 @@ public class AsSuperVisitor extends AbstractAtmComboVisitor<AnnotatedTypeMirror,
             AnnotationMirror result =
                     onSuper == null
                             ? onType
-                            : annotatedTypeFactory
+                            : atypeFactory
                                     .getQualifierHierarchy()
                                     .leastUpperBound(onSuper, onType);
             asSuper.replaceAnnotation(result);
