@@ -71,27 +71,6 @@ class TypeFromTypeTreeVisitor extends TypeFromTreeVisitor {
             WildcardType underlyingWildcard = (WildcardType) type.getUnderlyingType();
             underlyingWildcard.withTypeVar(wildcardAttachedToNode.bound);
             // End of work-around
-
-            final AnnotatedWildcardType wctype = ((AnnotatedWildcardType) type);
-            final ExpressionTree underlyingTree = node.getUnderlyingType();
-
-            if (underlyingTree.getKind() == Kind.UNBOUNDED_WILDCARD) {
-                // primary annotations on unbounded wildcard types apply to both bounds
-                wctype.getExtendsBound().addAnnotations(annos);
-                wctype.getSuperBound().addAnnotations(annos);
-            } else if (underlyingTree.getKind() == Kind.EXTENDS_WILDCARD) {
-                wctype.getSuperBound().addAnnotations(annos);
-            } else if (underlyingTree.getKind() == Kind.SUPER_WILDCARD) {
-                wctype.getExtendsBound().addAnnotations(annos);
-            } else {
-                throw new BugInCF(
-                        "Unexpected kind for type.  node="
-                                + node
-                                + " type="
-                                + type
-                                + " kind="
-                                + underlyingTree.getKind());
-            }
         } else {
             type.addAnnotations(annos);
         }
