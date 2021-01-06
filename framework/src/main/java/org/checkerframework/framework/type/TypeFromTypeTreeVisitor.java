@@ -186,8 +186,7 @@ class TypeFromTypeTreeVisitor extends TypeFromTreeVisitor {
         }
 
         AnnotatedTypeVariable result = (AnnotatedTypeVariable) f.type(node);
-        List<? extends AnnotationMirror> annotations = TreeUtils.annotationsFromTree(node);
-        result.getLowerBound().addAnnotations(annotations);
+        result.getLowerBound(); // TODO(cpovirk): Why is this necessary? to force initialization?
 
         switch (bounds.size()) {
             case 0:
