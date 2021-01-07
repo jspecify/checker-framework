@@ -159,6 +159,8 @@ public class JavaExpressionParseUtil {
      * Replaces every occurrence of "#NUMBER" with "_param_NUMBER" where NUMBER is the 1-based index
      * of a formal parameter.
      *
+     * <p>Note that this does replacement even within strings.
+     *
      * @param expression a Java expression in which to replace
      * @return the Java expression, with formal parameter references like "#2" replaced by an
      *     identifier like "_param_2"
@@ -190,6 +192,12 @@ public class JavaExpressionParseUtil {
         /** The type utilities. */
         private final Types types;
 
+        /**
+         * Create a new ExpressionToJavaExpressionVisitor.
+         *
+         * @param path path to the expression
+         * @param env the processing environment
+         */
         ExpressionToJavaExpressionVisitor(TreePath path, ProcessingEnvironment env) {
             this.path = path;
             this.env = env;
@@ -614,6 +622,9 @@ public class JavaExpressionParseUtil {
          * Returns a JavaExpression for the given field name.
          *
          * @param s a String representing an identifier (name expression, no dots in it)
+         * @param context the context
+         * @param originalReceiver whether the receiver is the original one
+         * @param fieldElem the field
          * @return a JavaExpression for the given name
          */
         private static JavaExpression getFieldJavaExpression(
@@ -650,6 +661,7 @@ public class JavaExpressionParseUtil {
          * Returns a JavaExpression for the given parameter.
          *
          * @param s a String that starts with PARAMETER_REPLACEMENT
+         * @param context the context
          * @return the JavaExpression for the given parameter
          */
         private static JavaExpression getParameterJavaExpression(
