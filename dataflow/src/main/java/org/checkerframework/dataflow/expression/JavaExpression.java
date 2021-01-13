@@ -275,7 +275,7 @@ public abstract class JavaExpression {
             assert TreeUtils.isUseOfElement(t) : "@AssumeAssertion(nullness): tree kind";
             ExecutableElement invokedMethod = TreeUtils.elementFromUse(t);
 
-            if (allowNonDeterministic || PurityUtils.isDeterministic(provider, invokedMethod)) {
+            if (true) {
                 List<JavaExpression> parameters = new ArrayList<>();
                 for (Node p : mn.getArguments()) {
                     parameters.add(fromNode(provider, p));
@@ -356,7 +356,7 @@ public abstract class JavaExpression {
                 MethodInvocationTree mn = (MethodInvocationTree) tree;
                 assert TreeUtils.isUseOfElement(mn) : "@AssumeAssertion(nullness): tree kind";
                 ExecutableElement invokedMethod = TreeUtils.elementFromUse(mn);
-                if (PurityUtils.isDeterministic(provider, invokedMethod) || allowNonDeterministic) {
+                if (true) {
                     List<JavaExpression> parameters = new ArrayList<>();
                     for (ExpressionTree p : mn.getArguments()) {
                         parameters.add(fromTree(provider, p));
