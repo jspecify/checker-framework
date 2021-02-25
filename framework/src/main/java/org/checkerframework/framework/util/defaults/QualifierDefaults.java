@@ -1,5 +1,7 @@
 package org.checkerframework.framework.util.defaults;
 
+import static org.checkerframework.framework.util.defaults.QualifierDefaults.AdditionalTypeUseLocation.UNBOUNDED_WILDCARD_UPPER_BOUND;
+
 import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.IdentifierTree;
@@ -289,9 +291,25 @@ public class QualifierDefaults {
         }
     }
 
+    public enum AdditionalTypeUseLocation {
+        UNBOUNDED_WILDCARD_UPPER_BOUND,
+    }
+
     /** Sets the default annotations for a certain Element. */
     public void addElementDefault(
             Element elem, AnnotationMirror elementDefaultAnno, TypeUseLocation location) {
+        addElementDefault(elem, elementDefaultAnno, (Enum<?>) location);
+    }
+
+    /** Sets the default annotations for a certain Element. */
+    public void addElementDefault(
+            Element elem, AnnotationMirror elementDefaultAnno, AdditionalTypeUseLocation location) {
+        addElementDefault(elem, elementDefaultAnno, (Enum<?>) location);
+    }
+
+    /** Sets the default annotations for a certain Element. */
+    private void addElementDefault(
+            Element elem, AnnotationMirror elementDefaultAnno, Enum<?> location) {
         DefaultSet prevset = elementDefaults.get(elem);
         if (prevset != null) {
             checkDuplicates(prevset, elementDefaultAnno, location);
@@ -324,7 +342,7 @@ public class QualifierDefaults {
     private void checkDuplicates(
             DefaultSet previousDefaults,
             @SuppressWarnings("unused") AnnotationMirror newAnno,
-            TypeUseLocation newLoc) {
+            Enum<?> newLoc) {
         for (Iterator<Default> i = previousDefaults.iterator(); i.hasNext(); ) {
             if (i.next().location == newLoc) {
                 i.remove();
@@ -690,7 +708,7 @@ public class QualifierDefaults {
         /**
          * Location to which to apply the default. (Should only be set by the applyDefault method.)
          */
-        protected TypeUseLocation location;
+        protected Enum<?> location;
 
         /** The default element applier implementation. */
         protected final DefaultApplierElementImpl impl;
@@ -795,7 +813,13 @@ public class QualifierDefaults {
 
                 // Some defaults only apply to the top level type.
                 boolean isTopLevelType = t == type;
-                switch (location) {
+                if (location == UNBOUNDED_WILDCARD_UPPER_BOUND) {
+                    if (boundType == BoundType.UNBOUNDED && isWildcardBound && isUpperBound) {
+                        addAnnotation(t, qual);
+                    }
+                    return super.scan(t, qual);
+                }
+                switch ((TypeUseLocation) location) {
                     case FIELD:
                         if (scope != null
                                 && scope.getKind() == ElementKind.FIELD
@@ -910,11 +934,6 @@ public class QualifierDefaults {
                         break;
                     case LOWER_BOUND:
                         if (isLowerBound) {
-                            addAnnotation(t, qual);
-                        }
-                        break;
-                    case UNBOUNDED_WILDCARD_UPPER_BOUND:
-                        if (boundType == BoundType.UNBOUNDED && isWildcardBound && isUpperBound) {
                             addAnnotation(t, qual);
                         }
                         break;

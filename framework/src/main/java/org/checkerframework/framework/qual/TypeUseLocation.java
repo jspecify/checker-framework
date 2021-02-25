@@ -59,8 +59,6 @@ public enum TypeUseLocation {
      */
     IMPLICIT_LOWER_BOUND,
 
-    UNBOUNDED_WILDCARD_UPPER_BOUND,
-
     /**
      * Apply default annotations to unannotated upper bounds: both explicit ones in {@code extends}
      * clauses, and implicit upper bounds when no explicit {@code extends} or {@code super} clause
