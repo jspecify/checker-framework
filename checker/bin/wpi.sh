@@ -147,8 +147,14 @@ function configure_and_exec_dljc {
       return
   fi
 
+  if [ "${JAVA_HOME}" = "${JAVA8_HOME}" ]; then
+    JDK_VERSION_ARG="--jdkVersion 8"
+  else
+    JDK_VERSION_ARG="--jdkVersion 11"
+  fi
+
   # This command also includes "clean"; I'm not sure why it is necessary.
-  DLJC_CMD="${DLJC} -t wpi $* -- ${BUILD_CMD}"
+  DLJC_CMD="${DLJC} -t wpi ${JDK_VERSION_ARG} $* -- ${BUILD_CMD}"
 
   if [ ! "x${TIMEOUT}" = "x" ]; then
       TMP="${DLJC_CMD}"
@@ -206,13 +212,9 @@ function configure_and_exec_dljc {
 
 SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-# clone or update DLJC
-if [ -d "${SCRIPTDIR}/.do-like-javac" ]; then
-    git -C "${SCRIPTDIR}/.do-like-javac" pull --quiet
-else
-    git -C "${SCRIPTDIR}" clone https://github.com/kelloggm/do-like-javac --depth 1 --quiet .do-like-javac || (echo "Cannot clone do-like-javac" && exit 1)
-fi
 
+# clone or update DLJC
+"${SCRIPTDIR}"/../bin-devel/.plume-scripts/git-clone-related kelloggm do-like-javac "${SCRIPTDIR}"/.do-like-javac
 DLJC="${SCRIPTDIR}/.do-like-javac/dljc"
 
 #### Main script
