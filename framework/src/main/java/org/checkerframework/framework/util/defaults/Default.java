@@ -18,60 +18,60 @@ import org.checkerframework.javacutil.AnnotationUtils;
  * <p>It also has a handy toString method that is useful for debugging.
  */
 public class Default implements Comparable<Default> {
-    // please remember to add any fields to the hashcode calculation
-    public final AnnotationMirror anno;
-    public final Enum<?> location;
+  // please remember to add any fields to the hashcode calculation
+  public final AnnotationMirror anno;
+  public final Enum<?> location;
 
-    public Default(final AnnotationMirror anno, final Enum<?> location) {
-        if (!(location instanceof TypeUseLocation)
-                && !(location instanceof AdditionalTypeUseLocation)) {
-            throw new IllegalArgumentException(
-                    "location argument " + location + " has unrecognized class " + location
-                            .getDeclaringClass().getName());
-        }
-        this.anno = anno;
-        this.location = location;
+  public Default(final AnnotationMirror anno, final Enum<?> location) {
+    if (!(location instanceof TypeUseLocation)
+        && !(location instanceof AdditionalTypeUseLocation)) {
+      throw new IllegalArgumentException(
+          "location argument " + location + " has unrecognized class "
+              + location.getDeclaringClass().getName());
+    }
+    this.anno = anno;
+    this.location = location;
+  }
+
+  @Override
+  public int compareTo(Default other) {
+    int locationOrder = TYPE_USE_LOCATION_COMPARATOR.compare(location, other.location);
+    if (locationOrder == 0) {
+      return AnnotationUtils.compareAnnotationMirrors(anno, other.anno);
+    } else {
+      return locationOrder;
+    }
+  }
+
+  @Override
+  public boolean equals(@Nullable Object thatObj) {
+    if (thatObj == this) {
+      return true;
     }
 
-    @Override
-    public int compareTo(Default other) {
-        int locationOrder = TYPE_USE_LOCATION_COMPARATOR.compare(location, other.location);
-        if (locationOrder == 0) {
-            return AnnotationUtils.compareAnnotationMirrors(anno, other.anno);
-        } else {
-            return locationOrder;
-        }
+    if (thatObj == null || thatObj.getClass() != Default.class) {
+      return false;
     }
 
-    @Override
-    public boolean equals(@Nullable Object thatObj) {
-        if (thatObj == this) {
-            return true;
-        }
+    return compareTo((Default) thatObj) == 0;
+  }
 
-        if (thatObj == null || thatObj.getClass() != Default.class) {
-            return false;
-        }
+  @Override
+  public int hashCode() {
+    return Objects.hash(anno, location);
+  }
 
-        return compareTo((Default) thatObj) == 0;
-    }
+  @Override
+  public String toString() {
+    return "( " + location.name() + " => " + anno + " )";
+  }
 
-    @Override
-    public int hashCode() {
-        return Objects.hash(anno, location);
-    }
-
-    @Override
-    public String toString() {
-        return "( " + location.name() + " => " + anno + " )";
-    }
-
-    /**
-     * Compares TypeUseLocation and AdditionalTypeUseLocation instances. Puts
-     * AdditionalTypeUseLocation first (so that it doesn't lose out to
-     * TypeUseLocation.OTHERWISE/ALL). Then compare within a single enum type using its usual order.
-     */
-    @SuppressWarnings("unchecked")
-    private static final Comparator<Enum<?>> TYPE_USE_LOCATION_COMPARATOR = comparing(
-            (Enum<?> e) -> e instanceof TypeUseLocation).thenComparing(e -> (Enum) e);
+  /**
+   * Compares TypeUseLocation and AdditionalTypeUseLocation instances. Puts
+   * AdditionalTypeUseLocation first (so that it doesn't lose out to TypeUseLocation.OTHERWISE/ALL).
+   * Then compares within a single enum type using its usual order.
+   */
+  @SuppressWarnings("unchecked")
+  private static final Comparator<Enum<?>> TYPE_USE_LOCATION_COMPARATOR =
+      comparing((Enum<?> e) -> e instanceof TypeUseLocation).thenComparing(e -> (Enum) e);
 }
