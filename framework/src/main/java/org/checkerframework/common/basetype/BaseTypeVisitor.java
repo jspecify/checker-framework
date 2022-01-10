@@ -2058,10 +2058,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
         visitorState.setAssignmentContext(Pair.of((Tree) node, ret));
 
         commonAssignmentCheck(
-            ret,
-            node.getExpression(),
-            "return",
-            extraArgForReturnTypeError(node.getExpression()));
+            ret, node.getExpression(), "return", extraArgForReturnTypeError(node.getExpression()));
       }
       return super.visitReturn(node, p);
     } finally {
@@ -3970,7 +3967,8 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
         boolean success;
         if (isMethodReference) {
           success =
-              atypeFactory.getTypeHierarchy()
+              atypeFactory
+                  .getTypeHierarchy()
                   .isSubtype(overriddenParams.get(i), overriderParams.get(i));
         } else {
           success =
