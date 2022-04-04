@@ -234,9 +234,17 @@ public class AnnotatedTypes {
     }
   }
 
+  /*
+   * In the methods below, we check the values of the bounds instead of checking isUnbound(). By
+   * doing so, we stick to the public javax.lang.model API. That said, our real motivation is that
+   * recent JDKs implement isUnbound() to return true for `? extends Object`. We want to distinguish
+   * that from `?`: https://jspecify.dev/spec#unbounded-wildcard
+   */
+
   /** This method identifies wildcard types that are unbound. */
   public static boolean hasNoExplicitBound(final AnnotatedTypeMirror wildcard) {
-    return ((Type.WildcardType) wildcard.getUnderlyingType()).isUnbound();
+    return ((WildcardType) wildcard.getUnderlyingType()).getExtendsBound() == null
+        && ((WildcardType) wildcard.getUnderlyingType()).getSuperBound() == null;
   }
 
   /**
@@ -245,9 +253,7 @@ public class AnnotatedTypes {
    * which necessitates this method
    */
   public static boolean hasExplicitSuperBound(final AnnotatedTypeMirror wildcard) {
-    final Type.WildcardType wildcardType = (Type.WildcardType) wildcard.getUnderlyingType();
-    return wildcardType.isSuperBound()
-        && !((WildcardType) wildcard.getUnderlyingType()).isUnbound();
+    return ((WildcardType) wildcard.getUnderlyingType()).getSuperBound() != null;
   }
 
   /**
@@ -256,9 +262,7 @@ public class AnnotatedTypes {
    * which necessitates this method
    */
   public static boolean hasExplicitExtendsBound(final AnnotatedTypeMirror wildcard) {
-    final Type.WildcardType wildcardType = (Type.WildcardType) wildcard.getUnderlyingType();
-    return wildcardType.isExtendsBound()
-        && !((WildcardType) wildcard.getUnderlyingType()).isUnbound();
+    return ((WildcardType) wildcard.getUnderlyingType()).getExtendsBound() != null;
   }
 
   /**
@@ -1446,27 +1450,33 @@ public class AnnotatedTypes {
     return result;
   }
 
-  // For Wildcards, isSuperBound and isExtendsBound will return true if isUnbound does.
+  /*
+   * In the methods below, we check the values of the bounds instead of checking isUnbound(). By
+   * doing so, we stick to the public javax.lang.model API. That said, our real motivation is that
+   * recent JDKs implement isUnbound() to return true for `? extends Object`. We want to distinguish
+   * that from `?`: https://jspecify.dev/spec#unbounded-wildcard
+   *
+   * It's possible that some of the methods would still have worked OK, but the safest move for us
+   * is to be consistent in checking the values of the bounds.
+   */
 
   public static boolean isExplicitlySuperBounded(final AnnotatedWildcardType wildcardType) {
-    return ((Type.WildcardType) wildcardType.getUnderlyingType()).isSuperBound()
-        && !((Type.WildcardType) wildcardType.getUnderlyingType()).isUnbound();
+    return wildcardType.getUnderlyingType().getSuperBound() != null;
   }
 
   /** Returns true if wildcard type was explicitly unbounded. */
   public static boolean isExplicitlyExtendsBounded(final AnnotatedWildcardType wildcardType) {
-    return ((Type.WildcardType) wildcardType.getUnderlyingType()).isExtendsBound()
-        && !((Type.WildcardType) wildcardType.getUnderlyingType()).isUnbound();
+    return wildcardType.getUnderlyingType().getExtendsBound() != null;
   }
 
   /** Returns true if this type is super bounded or unbounded. */
   public static boolean isUnboundedOrSuperBounded(final AnnotatedWildcardType wildcardType) {
-    return ((Type.WildcardType) wildcardType.getUnderlyingType()).isSuperBound();
+    return wildcardType.getUnderlyingType().getExtendsBound() == null;
   }
 
   /** Returns true if this type is extends bounded or unbounded. */
   public static boolean isUnboundedOrExtendsBounded(final AnnotatedWildcardType wildcardType) {
-    return ((Type.WildcardType) wildcardType.getUnderlyingType()).isExtendsBound();
+    return wildcardType.getUnderlyingType().getSuperBound() == null;
   }
 
   /**

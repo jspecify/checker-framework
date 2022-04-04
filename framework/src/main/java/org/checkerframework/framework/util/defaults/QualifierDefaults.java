@@ -1260,17 +1260,23 @@ public class QualifierDefaults {
    *     its an argument
    */
   public BoundType getWildcardBoundType(final AnnotatedWildcardType annotatedWildcard) {
+    /*
+     * We check the values of the bounds instead of checking isUnbound(). By doing so, we stick to
+     * the public javax.lang.model API. That said, our real motivation is that recent JDKs implement
+     * isUnbound() to return true for `? extends Object`. We want to distinguish that from `?`:
+     * https://jspecify.dev/spec#unbounded-wildcard
+     */
 
     final WildcardType wildcard = (WildcardType) annotatedWildcard.getUnderlyingType();
 
     final BoundType boundType;
-    if (wildcard.isUnbound()) {
+    if (wildcard.getExtendsBound() == null && wildcard.getSuperBound() == null) {
       boundType = BoundType.UNBOUNDED;
 
     } else {
       // note: isSuperBound will be true for unbounded and lowers, but the unbounded case is
       // already handled
-      boundType = wildcard.isSuperBound() ? BoundType.LOWER : BoundType.UPPER;
+      boundType = wildcard.getSuperBound() != null ? BoundType.LOWER : BoundType.UPPER;
     }
 
     return boundType;

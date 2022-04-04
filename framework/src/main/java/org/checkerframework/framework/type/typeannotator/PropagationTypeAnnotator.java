@@ -131,7 +131,13 @@ public class PropagationTypeAnnotator extends TypeAnnotator {
       final Set<? extends AnnotationMirror> tops =
           typeFactory.getQualifierHierarchy().getTopAnnotations();
 
-      if (wildcard.isUnbound()) {
+      /*
+       * We check both bounds instead of checking isUnbound(). By doing so, we stick to the public
+       * javax.lang.model API. That said, our real motivation is that recent JDKs implement
+       * isUnbound() to return true for `? extends Object`. We want to distinguish that from `?`:
+       * https://jspecify.dev/spec#unbounded-wildcard
+       */
+      if (wildcard.getExtendsBound() == null && wildcard.getSuperBound() == null) {
         propagateExtendsBound(wildcardAtm, typeParam, tops);
         propagateSuperBound(wildcardAtm, typeParam, tops);
 
