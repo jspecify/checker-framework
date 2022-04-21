@@ -594,14 +594,15 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
                   + inferArg
                   + " should be one of: -Ainfer=jaifs, -Ainfer=stubs, -Ainfer=ajava");
       }
+      boolean showWpiFailedInferences = checker.hasOption("showWpiFailedInferences");
       if (wpiOutputFormat == WholeProgramInference.OutputFormat.AJAVA) {
         wholeProgramInference =
             new WholeProgramInferenceImplementation<AnnotatedTypeMirror>(
-                this, new WholeProgramInferenceJavaParserStorage(this));
+                this, new WholeProgramInferenceJavaParserStorage(this), showWpiFailedInferences);
       } else {
         wholeProgramInference =
             new WholeProgramInferenceImplementation<ATypeElement>(
-                this, new WholeProgramInferenceScenesStorage(this));
+                this, new WholeProgramInferenceScenesStorage(this), showWpiFailedInferences);
       }
       if (!checker.hasOption("warns")) {
         // Without -Awarns, the inference output may be incomplete, because javac halts
@@ -4437,8 +4438,10 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
     // Functional interface
     AnnotatedTypeMirror functionalInterfaceType = getFunctionalInterfaceType(tree);
     if (functionalInterfaceType.getKind() == TypeKind.DECLARED) {
-      makeGroundTargetType(
-          (AnnotatedDeclaredType) functionalInterfaceType, (DeclaredType) TreeUtils.typeOf(tree));
+      functionalInterfaceType =
+          makeGroundTargetType(
+              (AnnotatedDeclaredType) functionalInterfaceType,
+              (DeclaredType) TreeUtils.typeOf(tree));
     }
 
     // Functional method
@@ -4621,22 +4624,29 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
    * @see "JLS 9.9"
    * @param functionalType the functional interface type
    * @param groundTargetJavaType the Java type as found by javac
+   * @return the grounded functional type
    */
-  private void makeGroundTargetType(
+  private AnnotatedDeclaredType makeGroundTargetType(
       AnnotatedDeclaredType functionalType, DeclaredType groundTargetJavaType) {
     if (functionalType.getTypeArguments().isEmpty()) {
-      return;
+      return functionalType;
     }
 
     List<AnnotatedTypeParameterBounds> bounds =
         this.typeVariablesFromUse(
             functionalType, (TypeElement) functionalType.getUnderlyingType().asElement());
 
-    List<AnnotatedTypeMirror> newTypeArguments = new ArrayList<>(functionalType.getTypeArguments());
     boolean sizesDiffer =
         functionalType.getTypeArguments().size() != groundTargetJavaType.getTypeArguments().size();
 
+    // This is the declared type of the functional type meaning that the type arguments are the
+    // type parameters.
+    DeclaredType declaredType =
+        (DeclaredType) functionalType.getUnderlyingType().asElement().asType();
+    Map<TypeVariable, AnnotatedTypeMirror> typeVarToTypeArg =
+        new HashMap<>(functionalType.getTypeArguments().size());
     for (int i = 0; i < functionalType.getTypeArguments().size(); i++) {
+      TypeVariable typeVariable = (TypeVariable) declaredType.getTypeArguments().get(i);
       AnnotatedTypeMirror argType = functionalType.getTypeArguments().get(i);
       if (argType.getKind() == TypeKind.WILDCARD) {
         AnnotatedWildcardType wildcardType = (AnnotatedWildcardType) argType;
@@ -4646,7 +4656,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         if (wildcardType.isUninferredTypeArgument()) {
           // Keep the uninferred type so that it is ignored by later subtyping and containment
           // checks.
-          newTypeArguments.set(i, wildcardType);
+          typeVarToTypeArg.put(typeVariable, wildcardType);
         } else if (isExtendsWildcard(wildcardType)) {
           TypeMirror correctArgType;
           if (sizesDiffer) {
@@ -4675,17 +4685,31 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             newArg = this.toAnnotatedType(correctArgType, false);
             newArg.replaceAnnotations(wildcardType.getExtendsBound().getAnnotations());
           }
-          newTypeArguments.set(i, newArg);
+
+          typeVarToTypeArg.put(typeVariable, newArg);
         } else {
-          newTypeArguments.set(i, wildcardType.getSuperBound());
+          typeVarToTypeArg.put(typeVariable, wildcardType.getSuperBound());
         }
+      } else {
+        typeVarToTypeArg.put(typeVariable, argType);
       }
     }
-    functionalType.setTypeArguments(newTypeArguments);
+
+    // The ground functional type must be created using type variable substitution or else the
+    // underlying type will not match the annotated type.
+    AnnotatedDeclaredType groundFunctionalType =
+        (AnnotatedDeclaredType)
+            AnnotatedTypeMirror.createType(declaredType, this, functionalType.isDeclaration());
+    initializeAtm(groundFunctionalType);
+    groundFunctionalType =
+        (AnnotatedDeclaredType)
+            getTypeVarSubstitutor().substitute(typeVarToTypeArg, groundFunctionalType);
+    groundFunctionalType.addAnnotations(functionalType.getAnnotations());
 
     // When the groundTargetJavaType is different from the underlying type of functionalType, only
     // the main annotations are copied.  Add default annotations in places without annotations.
-    addDefaultAnnotations(functionalType);
+    addDefaultAnnotations(groundFunctionalType);
+    return groundFunctionalType;
   }
 
   /**
@@ -4838,7 +4862,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
           // Javac used a declared type instead of a captured type variable.  This seems to happen
           // when the bounds of the captured type variable would have been identical. This seems to
           // be a violation of the JLS, but javac does this, so the Checker Framework must handle
-          // that case.
+          // that case. (See https://bugs.openjdk.java.net/browse/JDK-8054309.)
           replaceAnnotations(
               ((AnnotatedWildcardType) uncapturedTypeArg).getSuperBound(), capturedTypeArg);
         }
@@ -5148,11 +5172,22 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
       }
     }
 
-    // There is a bug in javac such that the upper bound of the captured type variable is not the
-    // greatest lower bound. So the captureTypeVar.getUnderlyingType().getUpperBound() may not
-    // be the same type as upperbound.getUnderlyingType().  See
-    // framework/tests/all-systems/Issue4890Interfaces.java,
-    // framework/tests/all-systems/Issue4890.java and framework/tests/all-systems/Issue4877.java.
+    if (upperBound.getKind() == TypeKind.INTERSECTION
+        && capturedTypeVar.getUpperBound().getKind() != TypeKind.INTERSECTION) {
+      // There is a bug in javac such that the upper bound of the captured type variable is not the
+      // greatest lower bound. So the captureTypeVar.getUnderlyingType().getUpperBound() may not
+      // be the same type as upperbound.getUnderlyingType().  See
+      // framework/tests/all-systems/Issue4890Interfaces.java,
+      // framework/tests/all-systems/Issue4890.java and framework/tests/all-systems/Issue4877.java.
+      // (I think this is  https://bugs.openjdk.java.net/browse/JDK-8039222.)
+      for (AnnotatedTypeMirror bound : ((AnnotatedIntersectionType) upperBound).getBounds()) {
+        if (types.isSameType(
+            bound.underlyingType, capturedTypeVar.getUpperBound().getUnderlyingType())) {
+          upperBound = bound;
+        }
+      }
+    }
+
     capturedTypeVar.setUpperBound(upperBound);
 
     // JLS 5.1.10 suggests that we should always be able to use the wildcard's bound directly.

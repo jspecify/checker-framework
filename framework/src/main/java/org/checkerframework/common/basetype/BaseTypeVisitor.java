@@ -78,7 +78,6 @@ import javax.lang.model.util.ElementFilter;
 import javax.tools.Diagnostic.Kind;
 import org.checkerframework.checker.compilermsgs.qual.CompilerMessageKey;
 import org.checkerframework.checker.interning.qual.FindDistinct;
-import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.checkerframework.common.wholeprograminference.WholeProgramInference;
 import org.checkerframework.dataflow.analysis.Analysis;
@@ -1824,6 +1823,19 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
         QualifierHierarchy hierarchy = atypeFactory.getQualifierHierarchy();
         Set<AnnotationMirror> annos = value.getAnnotations();
         inferredAnno = hierarchy.findAnnotationInSameHierarchy(annos, anno);
+      } else {
+        // If there is no information in the store (possible if e.g., no refinement
+        // of the field has occurred), use top instead of automatically
+        // issuing a warning. This is not perfectly precise: for example,
+        // if jeExpr is a field it would be more precise to use the field's
+        // declared type rather than top. However, doing so would be unsound
+        // in at least three circumstances where the type of the field depends
+        // on the type of the receiver: (1) all fields in Nullness Checker,
+        // because of possibility that the receiver is under initialization,
+        // (2) polymorphic fields, and (3) fields whose type is a type variable.
+        // Using top here instead means that there is no need for special cases
+        // for these situations.
+        inferredAnno = atypeFactory.getQualifierHierarchy().getTopAnnotation(anno);
       }
       if (!checkContract(exprJe, anno, inferredAnno, store)) {
         if (exprJe != null) {
@@ -2159,21 +2171,33 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
 
   /** Performs assignability check. */
   @Override
-  public Void visitUnary(UnaryTree node, Void p) {
-    Tree.Kind nodeKind = node.getKind();
-    if ((nodeKind == Tree.Kind.PREFIX_DECREMENT)
-        || (nodeKind == Tree.Kind.PREFIX_INCREMENT)
-        || (nodeKind == Tree.Kind.POSTFIX_DECREMENT)
-        || (nodeKind == Tree.Kind.POSTFIX_INCREMENT)) {
-      AnnotatedTypeMirror varType = atypeFactory.getAnnotatedTypeLhs(node.getExpression());
-      AnnotatedTypeMirror valueType = atypeFactory.getAnnotatedTypeRhsUnaryAssign(node);
+  public Void visitUnary(UnaryTree tree, Void p) {
+    Tree.Kind treeKind = tree.getKind();
+    if (treeKind == Tree.Kind.PREFIX_DECREMENT
+        || treeKind == Tree.Kind.PREFIX_INCREMENT
+        || treeKind == Tree.Kind.POSTFIX_DECREMENT
+        || treeKind == Tree.Kind.POSTFIX_INCREMENT) {
+      // Check the assignment that occurs at the increment/decrement. i.e.:
+      // exp = exp + 1 or exp = exp - 1
+      AnnotatedTypeMirror varType = atypeFactory.getAnnotatedTypeLhs(tree.getExpression());
+      AnnotatedTypeMirror valueType;
+      if (treeKind == Tree.Kind.POSTFIX_DECREMENT || treeKind == Tree.Kind.POSTFIX_INCREMENT) {
+        // For postfixed increments or decrements, the type of the tree the type of the expression
+        // before 1 is added or subtracted. So, use a special method to get the type after 1 has
+        // been added or subtracted.
+        valueType = atypeFactory.getAnnotatedTypeRhsUnaryAssign(tree);
+      } else {
+        // For prefixed increments or decrements, the type of the tree the type of the expression
+        // after 1 is added or subtracted. So, its type can be found using the usual method.
+        valueType = atypeFactory.getAnnotatedType(tree);
+      }
       String errorKey =
-          (nodeKind == Tree.Kind.PREFIX_INCREMENT || nodeKind == Tree.Kind.POSTFIX_INCREMENT)
+          (treeKind == Tree.Kind.PREFIX_INCREMENT || treeKind == Tree.Kind.POSTFIX_INCREMENT)
               ? "unary.increment"
               : "unary.decrement";
-      commonAssignmentCheck(varType, valueType, node, errorKey);
+      commonAssignmentCheck(varType, valueType, tree, errorKey);
     }
-    return super.visitUnary(node, p);
+    return super.visitUnary(tree, p);
   }
 
   /** Performs assignability check. */
@@ -2393,20 +2417,33 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
   }
 
   @Override
-  public Void visitInstanceOf(InstanceOfTree node, Void p) {
+  public Void visitInstanceOf(InstanceOfTree tree, Void p) {
     // The "reference type" is the type after "instanceof".
-    Tree refTypeTree = node.getType();
-    validateTypeOf(refTypeTree);
-    if (refTypeTree.getKind() == Tree.Kind.ANNOTATED_TYPE) {
-      AnnotatedTypeMirror refType = atypeFactory.getAnnotatedType(refTypeTree);
-      AnnotatedTypeMirror expType = atypeFactory.getAnnotatedType(node.getExpression());
-      if (!refType.hasAnnotation(NonNull.class)
-          && atypeFactory.getTypeHierarchy().isSubtype(refType, expType)
-          && !refType.getAnnotations().equals(expType.getAnnotations())) {
-        checker.reportWarning(node, "instanceof.unsafe", expType, refType);
+    Tree patternTree = TreeUtils.instanceOfGetPattern(tree);
+    if (patternTree != null) {
+      VariableTree variableTree = TreeUtils.bindingPatternTreeGetVariable(patternTree);
+      validateTypeOf(variableTree);
+      if (variableTree.getModifiers() != null) {
+        AnnotatedTypeMirror variableType = atypeFactory.getAnnotatedType(variableTree);
+        AnnotatedTypeMirror expType = atypeFactory.getAnnotatedType(tree.getExpression());
+        if (!isTypeCastSafe(variableType, expType)) {
+          checker.reportWarning(tree, "instanceof.pattern.unsafe", expType, variableTree);
+        }
+      }
+    } else {
+      Tree refTypeTree = tree.getType();
+      validateTypeOf(refTypeTree);
+      if (refTypeTree.getKind() == Tree.Kind.ANNOTATED_TYPE) {
+        AnnotatedTypeMirror refType = atypeFactory.getAnnotatedType(refTypeTree);
+        AnnotatedTypeMirror expType = atypeFactory.getAnnotatedType(tree.getExpression());
+        if (atypeFactory.getTypeHierarchy().isSubtype(refType, expType)
+            && !refType.getAnnotations().equals(expType.getAnnotations())) {
+          checker.reportWarning(tree, "instanceof.unsafe", expType, refType);
+        }
       }
     }
-    return super.visitInstanceOf(node, p);
+
+    return super.visitInstanceOf(tree, p);
   }
 
   /**
@@ -2471,7 +2508,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
    */
   public void warnAboutIrrelevantJavaTypes(
       @Nullable List<? extends AnnotationTree> annoTrees, Tree typeTree) {
-    if (atypeFactory.relevantJavaTypes == null) {
+    if (!shouldWarnAboutIrrelevantJavaTypes()) {
       return;
     }
 
@@ -2511,6 +2548,15 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
           return;
       }
     }
+  }
+
+  /**
+   * Returns true if the checker should issue warnings about irrelevant java types.
+   *
+   * @return true if the checker should issue warnings about irrelevant java types
+   */
+  protected boolean shouldWarnAboutIrrelevantJavaTypes() {
+    return atypeFactory.relevantJavaTypes != null;
   }
 
   /**

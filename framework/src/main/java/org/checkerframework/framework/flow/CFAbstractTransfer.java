@@ -216,7 +216,7 @@ public abstract class CFAbstractTransfer<
 
   /** The initial store maps method formal parameters to their currently most refined type. */
   @Override
-  public S initialStore(UnderlyingAST underlyingAST, @Nullable List<LocalVariableNode> parameters) {
+  public S initialStore(UnderlyingAST underlyingAST, List<LocalVariableNode> parameters) {
     if (underlyingAST.getKind() != UnderlyingAST.Kind.LAMBDA
         && underlyingAST.getKind() != UnderlyingAST.Kind.METHOD) {
       if (fixedInitialStore != null) {
@@ -969,6 +969,15 @@ public abstract class CFAbstractTransfer<
         return new RegularTransferResult<>(result.getResultValue(), in.getRegularStore());
       }
     }
+    // TODO: Should this be an else if?
+    if (node.getBindingVariable() != null) {
+      JavaExpression expr = JavaExpression.fromNode(node.getBindingVariable());
+      AnnotatedTypeMirror expType =
+          analysis.atypeFactory.getAnnotatedType(node.getTree().getExpression());
+      for (AnnotationMirror anno : expType.getAnnotations()) {
+        in.getRegularStore().insertOrRefine(expr, anno);
+      }
+    }
     return result;
   }
 
@@ -980,7 +989,8 @@ public abstract class CFAbstractTransfer<
    * @return whether to perform whole-program inference on the tree
    */
   private boolean shouldPerformWholeProgramInference(Tree tree) {
-    return infer && (tree == null || !analysis.checker.shouldSuppressWarnings(tree, ""));
+    @Nullable TreePath path = this.analysis.atypeFactory.getPath(tree);
+    return infer && (tree == null || !analysis.checker.shouldSuppressWarnings(path, ""));
   }
 
   /**

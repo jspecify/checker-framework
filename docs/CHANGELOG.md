@@ -1,5 +1,46 @@
-Version 3.?.? (?, 2021)
--------------------------------
+Version 3.21.5 (May 1, 2022)
+---------------------------------
+**User-visible changes:**
+
+**Implementation details:**
+
+**Closed issues:**
+
+
+Version 3.21.4 (April 1, 2022)
+---------------------------------
+
+**Closed issues:**
+#5086.
+
+
+Version 3.21.3 (March 1, 2022)
+---------------------------------
+
+**Closed issues:**
+#2847, #4965, #5039, #5042, #5047.
+
+
+Version 3.21.2 (February 1, 2022)
+---------------------------------
+
+**User-visible changes:**
+
+The `wpi.sh` script supports non-standard names for build system compile targets
+via the new `-c` command-line option.
+
+The Checker Framework now more precisely computes and checks the type of the
+pattern variable in a pattern match instanceof.
+
+**Implementation details:**
+
+Deprecated CFGLambda.getMethod{Name} in favor of getEnclosingMethod{Name}.
+
+**Closed issues:**
+#4615, #4993, #5006, #5007, #5008, #5013, #5016, #5021.
+
+Version 3.21.1 (January 7, 2022)
+--------------------------------
 
 **User-visible changes:**
 
@@ -7,13 +48,12 @@ The Checker Framework Gradle Plugin now works incrementally:  if you change just
 one source file, then Gradle will recompile just that file rather than all
 files.
 
-**Implementation details:**
-
 **Closed issues:**
+#2401, #4994, #4995, #4996.
 
 
 Version 3.21.0 (December 17, 2021)
--------------------------------
+----------------------------------
 
 **User-visible changes:**
 
@@ -29,7 +69,7 @@ was added.
 #2373, #4934, #4977, #4979, #4987.
 
 Version 3.20.0 (December 6, 2021)
--------------------------------
+---------------------------------
 
 **User-visible changes:**
 
@@ -56,7 +96,7 @@ Removed methods and classes that have been deprecated for more than one year:
 
 
 Version 3.19.0 (November 1, 2021)
--------------------------------
+---------------------------------
 
 **User-visible changes:**
 
@@ -81,14 +121,14 @@ Deprecated methods in AnnotatedTypeFactory:
 
 
 Version 3.18.1 (October 4, 2021)
--------------------------------
+--------------------------------
 
 **Closed issues:**
 #4902 and #4903.
 
 
 Version 3.18.0 (September 1, 2021)
--------------------------------
+----------------------------------
 
 **User-visible changes:**
 
@@ -4071,7 +4111,7 @@ Code Changes
     fixed generic and array handling of @ReadOnly
     fixed @RoMaybe resolution of receivers at method invocation
     fixed parsing of parenthesized trees and conditional trees
-    added initial support for for-enhanced loop
+    added initial support for enhanced-for loop
     fixed constructor behavior on @ReadOnly classes
     added checks for annotations on primitive types inside arrays
 
