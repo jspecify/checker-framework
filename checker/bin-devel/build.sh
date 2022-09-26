@@ -43,7 +43,7 @@ if [ ! -d ../annotation-tools ] ; then
   ln -s "${AT}" ../annotation-tools
 fi
 
-# check out the annotation-tools commit at which github.com/jspecify/checker-framework last merged from upstream.
+echo "Checking out the annotation-tools commit at which jspecify last merged from upstream."
 git -C "${AT}" checkout -q 7174291c828e88382758e0d5117f99418970f24f
 
 echo "Running:  (cd ${AT} && ./.build-without-test.sh)"
@@ -54,7 +54,7 @@ echo "... done: (cd ${AT} && ./.build-without-test.sh)"
 ## Build stubparser
 "$PLUME_SCRIPTS/git-clone-related" typetools stubparser -q
 
-# check out the stubparser version at which github.com/jspecify/checker-framework last merged from upstream.
+echo "Checking out the stubparser commit at which jspecify last merged from upstream."
 git -C ../stubparser checkout -q dd2c1d4a8b3c428d554d6fab6aa1b840d4031985
 
 echo "Running:  (cd ../stubparser/ && ./.build-without-test.sh)"
