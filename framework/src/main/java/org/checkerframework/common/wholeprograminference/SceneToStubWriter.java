@@ -129,7 +129,6 @@ public final class SceneToStubWriter {
    * @param a the annotation to print
    * @return the formatted annotation
    */
-  @SuppressWarnings("deprecation") // AnnotationFieldType.format(Object) is *temporarily* deprecated.
   public static String formatAnnotation(Annotation a) {
     String fullAnnoName = a.def().name;
     String simpleAnnoName = fullAnnoName.substring(fullAnnoName.lastIndexOf('.') + 1);
