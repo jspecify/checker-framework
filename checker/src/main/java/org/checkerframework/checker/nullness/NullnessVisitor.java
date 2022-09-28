@@ -68,8 +68,7 @@ import org.checkerframework.javacutil.TypesUtils;
 public class NullnessVisitor
     extends InitializationVisitor<NullnessAnnotatedTypeFactory, NullnessValue, NullnessStore> {
   // Error message keys
-  // private static final @CompilerMessageKey String ASSIGNMENT_TYPE_INCOMPATIBLE =
-  // "assignment.type.incompatible";
+  // private static final @CompilerMessageKey String ASSIGNMENT_TYPE_INCOMPATIBLE = "assignment";
   private static final @CompilerMessageKey String UNBOXING_OF_NULLABLE = "unboxing.of.nullable";
   private static final @CompilerMessageKey String LOCKING_NULLABLE = "locking.nullable";
   private static final @CompilerMessageKey String THROWING_NULLABLE = "throwing.nullable";
@@ -241,7 +240,7 @@ public class NullnessVisitor
   /** Case 1: Check for null dereferencing. */
   @Override
   public Void visitMemberSelect(MemberSelectTree node, Void p) {
-    Element e = TreeUtils.elementFromTree(node);
+    Element e = TreeUtils.elementFromUse(node);
     if (e.getKind() == ElementKind.CLASS) {
       if (atypeFactory.containsNullnessAnnotation(null, node.getExpression())) {
         checker.reportError(node, "nullness.on.outer");
@@ -379,7 +378,8 @@ public class NullnessVisitor
 
     if (checker.hasOption("assumeAssertionsAreEnabled")
         || CFCFGBuilder.assumeAssertionsActivatedForAssertTree(checker, node)) {
-      doVisitAssert = true;
+      /// There is nothing to do here, but don't perform the `else` test.
+      // doVisitAssert = true;
     } else if (checker.hasOption("assumeAssertionsAreDisabled")) {
       doVisitAssert = false;
     }

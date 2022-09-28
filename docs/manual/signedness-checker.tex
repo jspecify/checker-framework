@@ -85,11 +85,16 @@ These are the qualifiers in the signedness type system:
     covers the same cases as
     \refqualclass{checker/signedness/qual}{SignedPositive}, plus manifest literals, to
     prevent the programmer from having to annotate them all explicitly.
-    This annotation should almost never be written by the
-    programmer.
+    \emph{This annotation should almost never be written by the
+    programmer.}
 
  \item[\refqualclass{checker/signedness/qual}{PolySigned}]
    indicates qualifier polymorphism.
+   When two formal parameter types are annotated with
+   \refqualclass{checker/signedness/qual}{PolySigned}, the two arguments
+   at a call site
+   must have the same signedness type annotation.  (This differs from the
+   standard rule for polymorphic qualifiers.)
    For a description of qualifier polymorphism, see
    Section~\ref{method-qualifier-polymorphism}.
 

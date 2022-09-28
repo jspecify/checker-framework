@@ -139,8 +139,10 @@ Frequently-used tasks:
 <ul>
   <li> <code>assemble</code>: builds all jars.
   <li> <code>build</code>: <code>assemble</code>, plus runs all JUnit tests.
+  <li> <code>copyJarsToDist</code>: builds only the jars required to use checker/bin/javac; faster than assemble.
   <li> <code>allTests</code>: runs all tests.
-  <li> <code>reformat</code>: reformats Java files.
+  <li> <code>spotlessApply</code>: reformats Java files.
+  <li> <code>spotlessCheck</code>: checks formatting of Java files.
   <li> <code>NameOfJUnitTest</code>: runs the JUnit test with that name; for example, <code>NullnessTest</code>.
   <li> <code>task</code>: lists tasks; use <code>--all</code> to see all tasks.
 </ul>
@@ -185,12 +187,12 @@ Code in this project follows the
 <a href="https://google.github.io/styleguide/javaguide.html">Google Java Style
   Guide</a>,
 <a href="https://homes.cs.washington.edu/~mernst/advice/coding-style.html">Michael
-Ernst's coding style guidelines</a>, and <a href="http://www.oracle.com/technetwork/java/javase/documentation/codeconventions-136091.html#248">Oracle's
+Ernst's coding style guidelines</a>, and <a href="https://www.oracle.com/java/technologies/javase/codeconventions-indentation.html#248">Oracle's
 Java code conventions</a>.
 </p>
 
 <p>
-From the command line, you can format your code by running <code>./gradlew reformat</code>.
+From the command line, you can format your code by running <code>./gradlew spotlessApply</code>.
 You
 can <a href="https://github.com/google/google-java-format#using-the-formatter">configure
 your IDE</a> (Eclipse or IntelliJ) to use the formatting.
@@ -227,7 +229,7 @@ After that succeeds, import the projects into your IDE as Gradle projects.
 </p>
 
 <p>
-If your IDE cannot find <code>com.sun.source.*</code> packages, try changing the project JDK to JDK 11.
+If your IDE cannot find <code>com.sun.source.*</code> packages, try changing the project JDK to JDK 11 or JDK 17.
 </p>
 
 
@@ -393,7 +395,7 @@ We recommend Azure Pipelines.
   To enable Travis CI continuous integration for your fork:
 </p>
 <ul>
-  <li>Browse to <a href="https://travis-ci.com/">travis-ci.com</a></li>
+  <li>Browse to <a href="https://www.travis-ci.com/">travis-ci.com</a></li>
   <li>Click the downarrow for the dropdown, near your face in the upper right corner</li>
   <li>Click settings</li>
   <li>Find "checker-framework" in the list, and click the slider to enable it.</li>

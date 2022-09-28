@@ -6,6 +6,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.MethodTree;
+import com.sun.source.tree.NewClassTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.VariableTree;
 import com.sun.source.util.TreePath;
@@ -16,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -32,7 +34,7 @@ import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import org.checkerframework.checker.calledmethods.qual.CalledMethods;
-import org.checkerframework.checker.mustcall.CreatesMustCallForElementSupplier;
+import org.checkerframework.checker.mustcall.CreatesMustCallForToJavaExpression;
 import org.checkerframework.checker.mustcall.MustCallAnnotatedTypeFactory;
 import org.checkerframework.checker.mustcall.MustCallChecker;
 import org.checkerframework.checker.mustcall.qual.MustCall;
@@ -49,6 +51,7 @@ import org.checkerframework.dataflow.cfg.block.Block.BlockType;
 import org.checkerframework.dataflow.cfg.block.ExceptionBlock;
 import org.checkerframework.dataflow.cfg.block.SingleSuccessorBlock;
 import org.checkerframework.dataflow.cfg.node.AssignmentNode;
+import org.checkerframework.dataflow.cfg.node.ClassNameNode;
 import org.checkerframework.dataflow.cfg.node.FieldAccessNode;
 import org.checkerframework.dataflow.cfg.node.LocalVariableNode;
 import org.checkerframework.dataflow.cfg.node.MethodInvocationNode;
@@ -56,6 +59,7 @@ import org.checkerframework.dataflow.cfg.node.Node;
 import org.checkerframework.dataflow.cfg.node.NullLiteralNode;
 import org.checkerframework.dataflow.cfg.node.ObjectCreationNode;
 import org.checkerframework.dataflow.cfg.node.ReturnNode;
+import org.checkerframework.dataflow.cfg.node.SuperNode;
 import org.checkerframework.dataflow.cfg.node.ThisNode;
 import org.checkerframework.dataflow.cfg.node.TypeCastNode;
 import org.checkerframework.dataflow.expression.FieldAccess;
@@ -136,6 +140,12 @@ import org.plumelib.util.StringsPlume;
 /* package-private */
 class MustCallConsistencyAnalyzer {
 
+  /** True if errors related to static owning fields should be suppressed. */
+  private boolean permitStaticOwning;
+
+  /** True if errors related to field initialization should be suppressed. */
+  private boolean permitInitializationLeak;
+
   /**
    * Aliases about which the checker has already reported about a resource leak, to avoid duplicate
    * reports.
@@ -152,13 +162,13 @@ class MustCallConsistencyAnalyzer {
    * A cache for the result of calling {@code ResourceLeakAnnotatedTypeFactory.getStoreAfter()} on a
    * node. The cache prevents repeatedly computing least upper bounds on stores
    */
-  private Map<Node, CFStore> cmStoreAfter = new LinkedHashMap<>();
+  private IdentityHashMap<Node, CFStore> cmStoreAfter = new IdentityHashMap<>();
 
   /**
    * A cache for the result of calling {@code MustCallAnnotatedTypeFactory.getStoreAfter()} on a
    * node. The cache prevents repeatedly computing least upper bounds on stores
    */
-  private Map<Node, CFStore> mcStoreAfter = new LinkedHashMap<>();
+  private IdentityHashMap<Node, CFStore> mcStoreAfter = new IdentityHashMap<>();
 
   /** The Resource Leak Checker, used to issue errors. */
   private final ResourceLeakChecker checker;
@@ -342,7 +352,7 @@ class MustCallConsistencyAnalyzer {
     }
 
     @Override
-    public boolean equals(Object obj) {
+    public boolean equals(@Nullable Object obj) {
       if (this == obj) {
         return true;
       }
@@ -429,7 +439,7 @@ class MustCallConsistencyAnalyzer {
     }
 
     @Override
-    public boolean equals(Object o) {
+    public boolean equals(@Nullable Object o) {
       if (this == o) {
         return true;
       }
@@ -460,6 +470,8 @@ class MustCallConsistencyAnalyzer {
     this.typeFactory = typeFactory;
     this.checker = (ResourceLeakChecker) typeFactory.getChecker();
     this.analysis = analysis;
+    this.permitStaticOwning = checker.hasOption("permitStaticOwning");
+    this.permitInitializationLeak = checker.hasOption("permitInitializationLeak");
   }
 
   /**
@@ -552,8 +564,12 @@ class MustCallConsistencyAnalyzer {
    * Checks that an invocation of a CreatesMustCallFor method is valid.
    *
    * <p>Such an invocation is valid if any of the conditions in {@link
-   * #isValidCreatesMustCallForExpression(Set, JavaExpression, TreePath)} is true. If none of these
-   * conditions are true, this method issues a reset.not.owning error.
+   * #isValidCreatesMustCallForExpression(Set, JavaExpression, TreePath)} is true for each
+   * expression in the argument to the CreatesMustCallFor annotation. As a special case, the
+   * invocation of a CreatesMustCallFor method with "this" as its expression is permitted in the
+   * constructor of the relevant class (invoking a constructor already creates an obligation). If
+   * none of these conditions are true for any of the expressions, this method issues a
+   * reset.not.owning error.
    *
    * <p>For soundness, this method also guarantees that if any of the expressions in the
    * CreatesMustCallFor annotation has a tracked Obligation, any tracked resource aliases of it will
@@ -571,7 +587,7 @@ class MustCallConsistencyAnalyzer {
 
     TreePath currentPath = typeFactory.getPath(node.getTree());
     List<JavaExpression> cmcfExpressions =
-        CreatesMustCallForElementSupplier.getCreatesMustCallForExpressions(
+        CreatesMustCallForToJavaExpression.getCreatesMustCallForExpressionsAtInvocation(
             node, typeFactory, typeFactory);
     List<JavaExpression> missing = new ArrayList<>(0);
     for (JavaExpression expression : cmcfExpressions) {
@@ -583,6 +599,14 @@ class MustCallConsistencyAnalyzer {
     if (missing.isEmpty()) {
       // All expressions matched one of the rules, so the invocation is valid.
       return;
+    }
+
+    // Special case for invocations of CreatesMustCallFor("this") methods in the constructor.
+    if (missing.size() == 1) {
+      JavaExpression expression = missing.get(0);
+      if (expression instanceof ThisReference && TreePathUtil.inConstructor(currentPath)) {
+        return;
+      }
     }
 
     String missingStrs = StringsPlume.join(", ", missing);
@@ -810,8 +834,14 @@ class MustCallConsistencyAnalyzer {
   private boolean shouldTrackInvocationResult(Set<Obligation> obligations, Node node) {
     Tree callTree = node.getTree();
     if (callTree.getKind() == Tree.Kind.NEW_CLASS) {
-      // Constructor results from new expressions are always owning.
-      return true;
+      // Constructor results from new expressions are tracked as long as the declared type has a
+      // non-empty @MustCall annotation.
+      NewClassTree newClassTree = (NewClassTree) callTree;
+      ExecutableElement executableElement = TreeUtils.elementFromUse(newClassTree);
+      TypeElement typeElt = TypesUtils.getTypeElement(ElementUtils.getType(executableElement));
+      return typeElt == null
+          || !typeFactory.getMustCallValue(typeElt).isEmpty()
+          || !typeFactory.getMustCallValue(newClassTree).isEmpty();
     }
 
     // Now callTree.getKind() == Tree.Kind.METHOD_INVOCATION.
@@ -832,7 +862,7 @@ class MustCallConsistencyAnalyzer {
       return false;
     }
     return !returnTypeIsMustCallAliasWithUntrackable((MethodInvocationNode) node)
-        && !hasNotOwningReturnType((MethodInvocationNode) node);
+        && shouldTrackReturnType((MethodInvocationNode) node);
   }
 
   /**
@@ -1020,6 +1050,9 @@ class MustCallConsistencyAnalyzer {
       Set<Obligation> obligations, AssignmentNode assignmentNode) {
     Node lhs = assignmentNode.getTarget();
     Element lhsElement = TreeUtils.elementFromTree(lhs.getTree());
+    if (lhsElement == null) {
+      return;
+    }
     // Use the temporary variable for the rhs if it exists.
     Node rhs = NodeUtils.removeCasts(assignmentNode.getExpression());
     rhs = getTempVarOrNode(rhs);
@@ -1052,8 +1085,12 @@ class MustCallConsistencyAnalyzer {
         }
       }
     } else if (lhsElement.getKind() == ElementKind.RESOURCE_VARIABLE && isMustCallClose(rhs)) {
-      removeObligationsContainingVarIfNotDerivedFromMustCallAlias(
-          obligations, (LocalVariableNode) rhs);
+      if (rhs instanceof FieldAccessNode) {
+        // Handling of @Owning fields is a completely separate check.
+      } else if (rhs instanceof LocalVariableNode) {
+        removeObligationsContainingVarIfNotDerivedFromMustCallAlias(
+            obligations, (LocalVariableNode) rhs);
+      }
     } else if (lhs instanceof LocalVariableNode) {
       LocalVariableNode lhsVar = (LocalVariableNode) lhs;
       updateObligationsForPseudoAssignment(obligations, assignmentNode, lhsVar, rhs);
@@ -1064,8 +1101,8 @@ class MustCallConsistencyAnalyzer {
    * Returns true if must-call type of node only contains close. This is a helper method for
    * handling try-with-resources statements.
    *
-   * @param node the node.
-   * @return true if must-call type of node only contains close.
+   * @param node the node
+   * @return true if must-call type of node only contains close
    */
   boolean isMustCallClose(Node node) {
     MustCallAnnotatedTypeFactory mcAtf =
@@ -1211,6 +1248,9 @@ class MustCallConsistencyAnalyzer {
    * re-assignment is valid if the called methods type of the lhs before the assignment satisfies
    * the must-call obligations of the field.
    *
+   * <p>Despite the name of this method, the argument {@code node} might be the first and only
+   * assignment to a field.
+   *
    * @param obligations current tracked Obligations
    * @param node an assignment to a non-final, owning field
    */
@@ -1226,6 +1266,10 @@ class MustCallConsistencyAnalyzer {
     FieldAccessNode lhs = (FieldAccessNode) lhsNode;
     Node receiver = lhs.getReceiver();
 
+    if (permitStaticOwning && receiver instanceof ClassNameNode) {
+      return;
+    }
+
     // TODO: it would be better to defer getting the path until after checking
     // for a CreatesMustCallFor annotation, because getting the path can be expensive.
     // It might be possible to exploit the CFG structure to find the containing
@@ -1235,12 +1279,19 @@ class MustCallConsistencyAnalyzer {
     MethodTree enclosingMethodTree = TreePathUtil.enclosingMethod(currentPath);
 
     if (enclosingMethodTree == null) {
-      // If the assignment is taking place outside of a method, the Resource Leak Checker
-      // issues an error unless it can prove that the assignment is a field initializer, which
-      // are always safe. The node's TreeKind being "VARAIBLE" is a safe proxy for this requirement,
-      // because VARIABLE Trees are only used for declarations. An assignment to a field that is
-      // also a declaration must be a field initializer.
+      // The assignment is taking place outside of a method:  in a variable declaration's
+      // initializer or in an initializer block.
+      // The Resource Leak Checker issues no error if the assignment is a field initializer.
       if (node.getTree().getKind() == Tree.Kind.VARIABLE) {
+        // An assignment to a field that is also a declaration must be a field initializer (VARIABLE
+        // Trees are only used for declarations).  Assignment in a field initializer is always
+        // permitted.
+        return;
+      } else if (permitInitializationLeak
+          && TreePathUtil.isTopLevelAssignmentInInitializerBlock(currentPath)) {
+        // This is likely not reassignment; if reassignment, the number of assignments that
+        // were not warned about is limited to other initializations (is not unbounded).
+        // This behavior is unsound; see InstanceInitializer.java test case.
         return;
       } else {
         // Issue an error if the field has a non-empty must-call type.
@@ -1254,7 +1305,7 @@ class MustCallConsistencyAnalyzer {
         if (mcValues.isEmpty()) {
           return;
         }
-        Element lhsElement = TreeUtils.elementFromTree(lhs.getTree());
+        VariableElement lhsElement = TreeUtils.variableElementFromTree(lhs.getTree());
         checker.reportError(
             node.getTree(),
             "required.method.not.called",
@@ -1263,6 +1314,15 @@ class MustCallConsistencyAnalyzer {
             lhsElement.asType().toString(),
             "Field assignment outside method or declaration might overwrite field's current value");
         return;
+      }
+    } else if (permitInitializationLeak && TreeUtils.isConstructor(enclosingMethodTree)) {
+      Element enclosingClassElement =
+          TreeUtils.elementFromDeclaration(enclosingMethodTree).getEnclosingElement();
+      if (ElementUtils.isTypeElement(enclosingClassElement)) {
+        Element receiverElement = TypesUtils.getTypeElement(receiver.getType());
+        if (Objects.equals(enclosingClassElement, receiverElement)) {
+          return;
+        }
       }
     }
 
@@ -1318,7 +1378,7 @@ class MustCallConsistencyAnalyzer {
       cmAnno = typeFactory.top;
     }
     if (!calledMethodsSatisfyMustCall(mcValues, cmAnno)) {
-      Element lhsElement = TreeUtils.elementFromTree(lhs.getTree());
+      VariableElement lhsElement = TreeUtils.variableElementFromTree(lhs.getTree());
       if (!checker.shouldSkipUses(lhsElement)) {
         checker.reportError(
             node.getTree(),
@@ -1342,6 +1402,9 @@ class MustCallConsistencyAnalyzer {
       AssignmentNode node, MethodTree enclosingMethod) {
     Node lhs = node.getTarget();
     if (!(lhs instanceof FieldAccessNode)) {
+      return;
+    }
+    if (permitStaticOwning && ((FieldAccessNode) lhs).getReceiver() instanceof ClassNameNode) {
       return;
     }
 
@@ -1406,8 +1469,13 @@ class MustCallConsistencyAnalyzer {
       return "this";
     }
     if (receiver instanceof LocalVariableNode) {
-
       return ((LocalVariableNode) receiver).getName();
+    }
+    if (receiver instanceof ClassNameNode) {
+      return ((ClassNameNode) receiver).getElement().toString();
+    }
+    if (receiver instanceof SuperNode) {
+      return "super";
     }
     throw new TypeSystemError(
         "unexpected receiver of field assignment: " + receiver + " of type " + receiver.getClass());
@@ -1504,22 +1572,39 @@ class MustCallConsistencyAnalyzer {
   }
 
   /**
-   * Does the method being invoked have a not-owning return type?
+   * Is the return type of the invoked method one that should be tracked?
    *
    * @param node a method invocation
-   * @return true iff the checker is not in no-lightweight-ownership mode and (1) the method has a
-   *     void return type, or (2) a NotOwning annotation is present on the method declaration
+   * @return true iff the checker is in no-lightweight-ownership mode, or the method has a
+   *     {@code @MustCallAlias} annotation, or (1) the method has a return type that needs to be
+   *     tracked (i.e., it has a non-empty {@code @MustCall} obligation and (2) the method
+   *     declaration does not have a {@code @NotOwning} annotation
    */
-  private boolean hasNotOwningReturnType(MethodInvocationNode node) {
+  private boolean shouldTrackReturnType(MethodInvocationNode node) {
     if (checker.hasOption(MustCallChecker.NO_LIGHTWEIGHT_OWNERSHIP)) {
       // Default to always transferring at return if not using LO, just like Eclipse does.
-      return false;
+      return true;
     }
     MethodInvocationTree methodInvocationTree = node.getTree();
     ExecutableElement executableElement = TreeUtils.elementFromUse(methodInvocationTree);
-    // void methods are "not owning" by construction
-    return (ElementUtils.getType(executableElement).getKind() == TypeKind.VOID)
-        || (typeFactory.getDeclAnnotation(executableElement, NotOwning.class) != null);
+    if (typeFactory.hasMustCallAlias(executableElement)) {
+      // assume tracking is required
+      return true;
+    }
+    TypeMirror type = ElementUtils.getType(executableElement);
+    // void or primitive-returning methods are "not owning" by construction
+    if (type.getKind() == TypeKind.VOID || type.getKind().isPrimitive()) {
+      return false;
+    }
+    TypeElement typeElt = TypesUtils.getTypeElement(type);
+    // no need to track if type has no possible @MustCall obligation
+    if (typeElt != null
+        && typeFactory.getMustCallValue(typeElt).isEmpty()
+        && typeFactory.getMustCallValue(methodInvocationTree).isEmpty()) {
+      return false;
+    }
+    // check for absence of @NotOwning annotation
+    return (typeFactory.getDeclAnnotation(executableElement, NotOwning.class) == null);
   }
 
   /**
@@ -1789,7 +1874,7 @@ class MustCallConsistencyAnalyzer {
       MethodTree method = ((UnderlyingAST.CFGMethod) cfg.getUnderlyingAST()).getMethod();
       Set<Obligation> result = new LinkedHashSet<>(1);
       for (VariableTree param : method.getParameters()) {
-        Element paramElement = TreeUtils.elementFromDeclaration(param);
+        VariableElement paramElement = TreeUtils.elementFromDeclaration(param);
         boolean hasMustCallAlias = typeFactory.hasMustCallAlias(paramElement);
         if (hasMustCallAlias
             || (typeFactory.declaredTypeHasMustCall(param)
@@ -2094,7 +2179,7 @@ class MustCallConsistencyAnalyzer {
     }
 
     @Override
-    public boolean equals(Object o) {
+    public boolean equals(@Nullable Object o) {
       if (this == o) {
         return true;
       }

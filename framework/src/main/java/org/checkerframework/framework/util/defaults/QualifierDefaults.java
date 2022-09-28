@@ -12,6 +12,7 @@ import com.sun.source.tree.Tree;
 import com.sun.source.tree.TypeParameterTree;
 import com.sun.source.tree.VariableTree;
 import com.sun.source.util.TreePath;
+import com.sun.tools.javac.code.BoundKind;
 import com.sun.tools.javac.code.Type.WildcardType;
 import java.util.Arrays;
 import java.util.Collections;
@@ -542,7 +543,7 @@ public class QualifierDefaults {
     applyToTypeVar =
         defaultTypeVarLocals
             && elt != null
-            && elt.getKind() == ElementKind.LOCAL_VARIABLE
+            && ElementUtils.isLocalVariable(elt)
             && type.getKind() == TypeKind.TYPEVAR;
     applyDefaultsElement(elt, type);
     applyToTypeVar = false;

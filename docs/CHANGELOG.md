@@ -1,21 +1,143 @@
-Version 3.21.5 (May 1, 2022)
----------------------------------
+Version 3.26.0 (October 4, 2022)
+--------------------------------
+
 **User-visible changes:**
 
+The Checker Framework runs under JDK 18 -- that is, it runs on a version 18 JVM.
+(It worked before, but gave a warning that it was not tested.)
+
+Annotations are available for some new JDK 17 APIs (some of those
+introduced since JDK 11).
+
+Added `-AnoWarnMemoryConstraints` to change the "Memory constraints are impeding
+performance; please increase max heap size" message from a warning to a note.
+
+'unneeded.suppression' warnings can now themeselves be suppressed.
+
 **Implementation details:**
+
+Deprecated `TreeUtils.constructor()` in favor of `TreeUtils.elementFromUse()`.
+
+Added method `isSideEffectFree()` to the `AnnotationProvider` interface.
+
+Deprecated `CFAbstractStore.isSideEffectFree()` in favor of new method
+`AnnotationProvider.isSideEffectFree()`.  Note the different contracts of
+`PurityUtils.isSideEffectFree()` and `AnnotationProvider.isSideEffectFree()`.
+
+Use `TreeUtils.elementFromDeclaration` and `TreeUtils.elementFromUse` in
+preference to `TreeUtils.elementFromTree`, when possible.
+
+For code formatting, use `./gradlew spotlessCheck` and `./gradlew spotlessApply`.
+The `checkFormat` and `reformat` Gradle tasks have been removed.
+
+Removed variable `BaseTypeVisitor.inferPurity`.
 
 **Closed issues:**
 
 
+Version 3.25.0 (September 1, 2022)
+----------------------------------
+
+**User-visible changes:**
+
+Make `mustcall.not.inheritable` a warning rather than an error
+
+The Property File Checker, Internationalization Checker, and Compiler
+Message Checker use `File.pathSeparator` to separate property file paths in
+`-Apropfiles`, rather than ':'.
+
+Added `DoNothingChecker` that does nothing.
+
+**Closed issues:**
+
+#5216, #5240, #5256, #5273.
+
+
+Version 3.24.0 (August 3, 2022)
+-------------------------------
+
+**User-visible changes:**
+
+Performance improvements.
+
+Minor bug fixes and enhancements.
+
+**Implementation details:**
+
+Prefer `SystemUtil.jreVersion` to `SystemUtil.getJreVersion()`.
+
+**Closed issues:**
+
+#5200, #5216.
+
+
+Version 3.23.0 (July 11, 2022)
+------------------------------
+
+**User-visible changes:**
+
+By default, command-line argument `-AstubWarnIfNotFound` is treated as true
+for stub files provided on the command line and false for built-in stub
+files.  Use `-AstubWarnIfNotFound` to enable it for all stub files, and use
+new `-AstubNoWarnIfNotFound` to disable it for all stub files.
+
+New command-line argument `-ApermitStaticOwning` suppresses Resource Leak
+Checker warnings related to static owning fields.
+
+New command-line argument `-ApermitInitializationLeak` suppresses Resource Leak
+Checker warnings related to field initialization.
+
+**Closed issues:**
+
+#4855, #5151, #5166, #5172, #5175, #5181, #5189.
+
+
+Version 3.22.2 (June 14, 2022)
+------------------------------
+
+**Implementation details:**
+
+Expose CFG APIs to allow inserting jumps and throws
+
+
+Version 3.22.1 (June 1, 2022)
+-----------------------------
+
+**Closed issues:**
+#58, #5136, #5138, #5142, #5143,
+
+
+Version 3.22.0 (May 2, 2022)
+----------------------------
+
+**User-visible changes:**
+
+The Signedness Checker now checks calls to `equals()` as well as to `==`.  When
+two formal parameter types are annotated with @PolySigned, the two arguments at
+a call site must have the same signedness type annotation. (This differs from
+the standard rule for polymorphic qualifiers.)
+
+**Implementation details:**
+
+When passed a NewClassTree that creates an anonymous constructor,
+AnnotatedTypeFactory#constructorFormUse now returns the type of the anonymous
+constructor rather than the type of the super constructor invoked in the
+anonymous classes constructor.  If the super constructor has explicit
+annotations, they are copied to the anonymous classes constructor.
+
+**Closed issues:**
+#5113.
+
+
 Version 3.21.4 (April 1, 2022)
----------------------------------
+------------------------------
 
 **Closed issues:**
 #5086.
 
 
 Version 3.21.3 (March 1, 2022)
----------------------------------
+------------------------------
 
 **Closed issues:**
 #2847, #4965, #5039, #5042, #5047.
@@ -4168,7 +4290,7 @@ Code Changes
     fixed mutability type handling for type casts and field access
     fixed bug, ensuring no primitives can be ReadOnly
     a method receiver type is now based on the correct annotation
-    fixed parameter type-checking for overriden methods
+    fixed parameter type-checking for overridden methods
     fixed bug on readonly field initialization
     added handling for unary trees
 

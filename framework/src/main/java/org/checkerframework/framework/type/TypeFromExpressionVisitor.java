@@ -25,6 +25,7 @@ import com.sun.source.tree.TypeCastTree;
 import com.sun.source.tree.UnaryTree;
 import com.sun.source.tree.WildcardTree;
 import java.util.List;
+import java.util.Set;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 import javax.lang.model.type.TypeKind;
@@ -32,8 +33,10 @@ import javax.lang.model.type.TypeMirror;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedArrayType;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedDeclaredType;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedExecutableType;
+import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedTypeVariable;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedWildcardType;
 import org.checkerframework.framework.util.AnnotatedTypes;
+import org.checkerframework.framework.util.AnnotationMirrorSet;
 import org.checkerframework.javacutil.BugInCF;
 import org.checkerframework.javacutil.ElementUtils;
 import org.checkerframework.javacutil.SwitchExpressionScanner;
@@ -213,7 +216,8 @@ class TypeFromExpressionVisitor extends TypeFromTreeVisitor {
     Element elt = TreeUtils.elementFromUse(node);
     AnnotatedTypeMirror selfType = f.getImplicitReceiverType(node);
     if (selfType != null) {
-      return AnnotatedTypes.asMemberOf(f.types, f, selfType, elt).asUse();
+      AnnotatedTypeMirror type = AnnotatedTypes.asMemberOf(f.types, f, selfType, elt).asUse();
+      return f.applyCaptureConversion(type, TreeUtils.typeOf(node));
     }
 
     AnnotatedTypeMirror type = f.getAnnotatedType(elt);
@@ -339,23 +343,31 @@ class TypeFromExpressionVisitor extends TypeFromTreeVisitor {
    */
   @Override
   public AnnotatedTypeMirror visitNewClass(NewClassTree node, AnnotatedTypeFactory f) {
-    // constructorFromUse return type has default annotations
-    // so use fromNewClass which does diamond inference and only
-    // contains explicit annotations.
-    AnnotatedDeclaredType type = f.fromNewClass(node);
-
     // Add annotations that are on the constructor declaration.
-    AnnotatedExecutableType ex = f.constructorFromUse(node).executableType;
-    type.addMissingAnnotations(ex.getReturnType().getAnnotations());
-
-    return type;
+    AnnotatedDeclaredType returnType =
+        (AnnotatedDeclaredType) f.constructorFromUse(node).executableType.getReturnType();
+    // Clear the annotations on the return type, so that the explicit annotations can be added
+    // first, then the annotations from the return type are added as needed.
+    Set<AnnotationMirror> fromReturn = new AnnotationMirrorSet(returnType.getAnnotations());
+    returnType.clearPrimaryAnnotations();
+    returnType.addAnnotations(f.getExplicitNewClassAnnos(node));
+    returnType.addMissingAnnotations(fromReturn);
+    return returnType;
   }
 
   @Override
   public AnnotatedTypeMirror visitMethodInvocation(
       MethodInvocationTree node, AnnotatedTypeFactory f) {
     AnnotatedExecutableType ex = f.methodFromUse(node).executableType;
-    return f.applyCaptureConversion(ex.getReturnType().asUse());
+    AnnotatedTypeMirror returnT = ex.getReturnType().asUse();
+    if (TypesUtils.isCapturedTypeVariable(returnT.getUnderlyingType())
+        && !TypesUtils.isCapturedTypeVariable(TreeUtils.typeOf(node))) {
+      // Sometimes javac types an expression as the upper bound of a captured type variable instead
+      // of the captured type variable itself. This seems to be a bug in javac. Detect this case and
+      // match the annotated type to the Java type.
+      returnT = ((AnnotatedTypeVariable) returnT).getUpperBound();
+    }
+    return f.applyCaptureConversion(returnT);
   }
 
   @Override

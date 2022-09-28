@@ -187,7 +187,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
   /** The factory to use for obtaining "parsed" version of annotations. */
   protected final Factory atypeFactory;
 
-  /** For obtaining line numbers in -Ashowchecks debugging output. */
+  /** For obtaining line numbers in {@code -Ashowchecks} debugging output. */
   protected final SourcePositions positions;
 
   /** The element for java.util.Vector#copyInto. */
@@ -231,12 +231,6 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
    * command line.
    */
   private final boolean checkPurity;
-  /**
-   * True if purity annotations should be inferred. Should be set to false if both the Lock Checker
-   * (or some other checker that overrides {@link CFAbstractStore#isSideEffectFree} in a
-   * non-standard way) and some other checker is being run.
-   */
-  protected boolean inferPurity = true;
 
   /** The tree of the enclosing method that is currently being visited. */
   protected @Nullable MethodTree methodTree = null;
@@ -1008,24 +1002,26 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
     if (suggestPureMethods && !TreeUtils.isSynthetic(node)) {
       // Issue a warning if the method is pure, but not annotated as such.
       EnumSet<Pure.Kind> additionalKinds = r.getKinds().clone();
-      additionalKinds.removeAll(kinds);
+      if (!infer) {
+        // During WPI, propagate all purity kinds, even those that are already
+        // present (because they were inferred in a previous WPI round).
+        additionalKinds.removeAll(kinds);
+      }
       if (TreeUtils.isConstructor(node)) {
         additionalKinds.remove(Pure.Kind.DETERMINISTIC);
       }
       if (!additionalKinds.isEmpty()) {
         if (infer) {
-          if (inferPurity) {
-            WholeProgramInference wpi = atypeFactory.getWholeProgramInference();
-            ExecutableElement methodElt = TreeUtils.elementFromDeclaration(node);
-            if (additionalKinds.size() == 2) {
-              wpi.addMethodDeclarationAnnotation(methodElt, PURE);
-            } else if (additionalKinds.contains(Pure.Kind.SIDE_EFFECT_FREE)) {
-              wpi.addMethodDeclarationAnnotation(methodElt, SIDE_EFFECT_FREE);
-            } else if (additionalKinds.contains(Pure.Kind.DETERMINISTIC)) {
-              wpi.addMethodDeclarationAnnotation(methodElt, DETERMINISTIC);
-            } else {
-              throw new BugInCF("Unexpected purity kind in " + additionalKinds);
-            }
+          WholeProgramInference wpi = atypeFactory.getWholeProgramInference();
+          ExecutableElement methodElt = TreeUtils.elementFromDeclaration(node);
+          if (additionalKinds.size() == 2) {
+            wpi.addMethodDeclarationAnnotation(methodElt, PURE);
+          } else if (additionalKinds.contains(Pure.Kind.SIDE_EFFECT_FREE)) {
+            wpi.addMethodDeclarationAnnotation(methodElt, SIDE_EFFECT_FREE);
+          } else if (additionalKinds.contains(Pure.Kind.DETERMINISTIC)) {
+            wpi.addMethodDeclarationAnnotation(methodElt, DETERMINISTIC);
+          } else {
+            throw new BugInCF("Unexpected purity kind in " + additionalKinds);
           }
         } else {
           if (additionalKinds.size() == 2) {
@@ -1644,7 +1640,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
           methodName,
           invokedMethod.getTypeVariables());
       List<AnnotatedTypeMirror> params =
-          AnnotatedTypes.expandVarArgsParameters(atypeFactory, invokedMethod, node.getArguments());
+          AnnotatedTypes.adaptParameters(atypeFactory, invokedMethod, node.getArguments());
       checkArguments(params, node.getArguments(), methodName, method.getParameters());
       checkVarargs(invokedMethod, node);
 
@@ -1668,7 +1664,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
         checkThisConstructorCall(node);
       }
     } catch (RuntimeException t) {
-      // Sometimes the type arguments are inferred incorrect which causes crashes. Once #979
+      // Sometimes the type arguments are inferred incorrectly, which causes crashes. Once #979
       // is fixed this should be removed and crashes should be reported normally.
       if (node.getTypeArguments().size() == typeargs.size()) {
         // They type arguments were explicitly written.
@@ -1923,7 +1919,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
    */
   @Override
   public Void visitNewClass(NewClassTree node, Void p) {
-    if (checker.shouldSkipUses(TreeUtils.constructor(node))) {
+    if (checker.shouldSkipUses(TreeUtils.elementFromUse(node))) {
       return super.visitNewClass(node, p);
     }
 
@@ -1933,7 +1929,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
 
     List<? extends ExpressionTree> passedArguments = node.getArguments();
     List<AnnotatedTypeMirror> params =
-        AnnotatedTypes.expandVarArgsParameters(atypeFactory, constructorType, passedArguments);
+        AnnotatedTypes.adaptParameters(atypeFactory, constructorType, passedArguments);
 
     ExecutableElement constructor = constructorType.getElement();
     CharSequence constructorName = ElementUtils.getSimpleNameOrDescription(constructor);
@@ -3232,7 +3228,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
       AnnotatedExecutableType constructor,
       NewClassTree newClassTree) {
     // Only check the primary annotations, the type arguments are checked elsewhere.
-    Set<AnnotationMirror> explicitAnnos = atypeFactory.fromNewClass(newClassTree).getAnnotations();
+    Set<AnnotationMirror> explicitAnnos = atypeFactory.getExplicitNewClassAnnos(newClassTree);
     if (explicitAnnos.isEmpty()) {
       return;
     }
@@ -3497,7 +3493,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
     // ========= Overriding Executable =========
     // The ::method element, see JLS 15.13.1 Compile-Time Declaration of a Method Reference
     ExecutableElement compileTimeDeclaration =
-        (ExecutableElement) TreeUtils.elementFromTree(memberReferenceTree);
+        (ExecutableElement) TreeUtils.elementFromUse(memberReferenceTree);
 
     if (enclosingType.getKind() == TypeKind.DECLARED
         && ((AnnotatedDeclaredType) enclosingType).isUnderlyingTypeRaw()) {
@@ -3929,7 +3925,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
       List<AnnotatedTypeMirror> overriddenParams = overridden.getParameterTypes();
 
       // Fix up method reference parameters.
-      // See https://docs.oracle.com/javase/specs/jls/se11/html/jls-15.html#jls-15.13.1
+      // See https://docs.oracle.com/javase/specs/jls/se17/html/jls-15.html#jls-15.13.1
       if (isMethodReference) {
         // The functional interface of an unbound member reference has an extra parameter
         // (the receiver).
