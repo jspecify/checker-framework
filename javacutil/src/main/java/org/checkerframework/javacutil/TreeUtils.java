@@ -43,6 +43,7 @@ import com.sun.tools.javac.tree.JCTree.JCAnnotation;
 import com.sun.tools.javac.tree.JCTree.JCBinary;
 import com.sun.tools.javac.tree.JCTree.JCExpression;
 import com.sun.tools.javac.tree.JCTree.JCExpressionStatement;
+import com.sun.tools.javac.tree.JCTree.JCFieldAccess;
 import com.sun.tools.javac.tree.JCTree.JCLambda;
 import com.sun.tools.javac.tree.JCTree.JCLambda.ParameterKind;
 import com.sun.tools.javac.tree.JCTree.JCLiteral;
@@ -108,6 +109,9 @@ public final class TreeUtils {
 
   /** The value of Flags.COMPACT_RECORD_CONSTRUCTOR which does not exist in Java 9 or 11. */
   static final long Flags_COMPACT_RECORD_CONSTRUCTOR = 1L << 51;
+
+  /** The {@code TreeMaker.Select(JCExpression, Symbol)} method. Return type changes for JDK21+. */
+  private static final Method treeMakerSelect;
 
   /**
    * Checks if the provided method is a constructor method or no.
@@ -689,6 +693,11 @@ public final class TreeUtils {
       if (kind.asInterface() == ClassTree.class) {
         classTreeKinds.add(kind);
       }
+    }
+    try {
+      treeMakerSelect = TreeMaker.class.getMethod("Select", JCExpression.class, Symbol.class);
+    } catch (NoSuchMethodException e) {
+      throw new BugInCF("TreeMaker.Select reflection problem", e);
     }
   }
 
@@ -1908,6 +1917,25 @@ public final class TreeUtils {
 
     TypeMirror varargsParamType = parameters.get(parameters.size() - 1).asType();
     return TypesUtils.getArrayDepth(varargsParamType) != TypesUtils.getArrayDepth(lastArgType);
+  }
+
+  /** Returns the result of {@code treeMaker.Select(base, sym)}. */
+  public static JCFieldAccess Select(TreeMaker treeMaker, Tree base, Symbol sym) {
+    try {
+      return (JCFieldAccess) treeMakerSelect.invoke(treeMaker, base, sym);
+    } catch (InvocationTargetException | IllegalAccessException e) {
+      throw new BugInCF("TreeUtils.Select: reflection failed for tree: %s", base, e);
+    }
+  }
+
+  /** Returns the result of {@code treeMaker.Select(base, name)}. */
+  public static JCFieldAccess Select(
+      TreeMaker treeMaker, JCExpression base, com.sun.tools.javac.util.Name name) {
+    /*
+     * There's no need for reflection here. The only reason we even declare this method is so that
+     * callers don't have to remember which overload we provide a wrapper around.
+     */
+    return treeMaker.Select(base, name);
   }
 
   /**
