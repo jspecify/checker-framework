@@ -356,6 +356,11 @@ public class TestDiagnosticUtils {
           fromJSpecifyFileComment(filename, errorLine, trimmedLine.substring(3));
       return new TestDiagnosticLine(
           filename, errorLine, line, Collections.singletonList(diagnostic));
+    } else if (trimmedLine.startsWith("// test:cannot-convert")) {
+      TestDiagnostic diagnostic =
+          fromJSpecifyFileComment(filename, errorLine, trimmedLine.substring(3));
+      return new TestDiagnosticLine(
+          filename, errorLine, line, Collections.singletonList(diagnostic));
     } else {
       // It's a bit gross to create empty diagnostics (returning null might be more
       // efficient), but they will be filtered out later.
