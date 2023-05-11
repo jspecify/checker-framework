@@ -46,9 +46,11 @@ fi
 echo "Checking out the annotation-tools commit at which jspecify last merged from upstream."
 git -C "${AT}" checkout -q 7174291c828e88382758e0d5117f99418970f24f
 
-echo "Running:  (cd ${AT} && ./.build-without-test.sh)"
-(cd "${AT}" && ./.build-without-test.sh)
-echo "... done: (cd ${AT} && ./.build-without-test.sh)"
+if false; then # DO NOT BUILD DURING THE BUILD
+  echo "Running:  (cd ${AT} && ./.build-without-test.sh)"
+  (cd "${AT}" && ./.build-without-test.sh)
+  echo "... done: (cd ${AT} && ./.build-without-test.sh)"
+fi
 
 
 ## Build stubparser
@@ -57,9 +59,11 @@ echo "... done: (cd ${AT} && ./.build-without-test.sh)"
 echo "Checking out the stubparser commit at which jspecify last merged from upstream."
 git -C ../stubparser checkout -q dd2c1d4a8b3c428d554d6fab6aa1b840d4031985
 
-echo "Running:  (cd ../stubparser/ && ./.build-without-test.sh)"
-(cd ../stubparser/ && ./.build-without-test.sh)
-echo "... done: (cd ../stubparser/ && ./.build-without-test.sh)"
+if false; then # DO NOT BUILD DURING THE BUILD
+  echo "Running:  (cd ../stubparser/ && ./.build-without-test.sh)"
+  (cd ../stubparser/ && ./.build-without-test.sh)
+  echo "... done: (cd ../stubparser/ && ./.build-without-test.sh)"
+fi
 
 
 ## Build JSpecify, only for the purpose of using its tests.
@@ -72,22 +76,27 @@ else
   echo "Can't find java"
   exit 1
 fi
-version=$("$_java" -version 2>&1 | head -1 | cut -d'"' -f2 | sed '/^1\./s///' | cut -d'.' -f1)
-if [[ "$version" -ge 9 ]]; then
-  echo "Running:  (cd ../jspecify/ && ./gradlew build)"
-  # If failure, retry in case the failure was due to network lossage.
-  (cd ../jspecify/ && export JDK_JAVA_OPTIONS='--add-opens jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED --add-opens jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED --add-opens jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED --add-opens jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED --add-opens jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED --add-opens jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED --add-opens jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED --add-opens jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED --add-opens jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED' && (./gradlew build || (sleep 60 && ./gradlew build)))
-  echo "... done: (cd ../jspecify/ && ./gradlew build)"
+
+if false; then # DO NOT BUILD DURING THE BUILD
+  version=$("$_java" -version 2>&1 | head -1 | cut -d'"' -f2 | sed '/^1\./s///' | cut -d'.' -f1)
+  if [[ "$version" -ge 9 ]]; then
+    echo "Running:  (cd ../jspecify/ && ./gradlew build)"
+    # If failure, retry in case the failure was due to network lossage.
+    (cd ../jspecify/ && export JDK_JAVA_OPTIONS='--add-opens jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED --add-opens jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED --add-opens jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED --add-opens jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED --add-opens jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED --add-opens jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED --add-opens jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED --add-opens jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED --add-opens jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED' && (./gradlew build || (sleep 60 && ./gradlew build)))
+    echo "... done: (cd ../jspecify/ && ./gradlew build)"
+  fi
 fi
 
 
 ## Compile
 
-# Downloading the gradle wrapper sometimes fails.
-# If so, the next command gets another chance to try the download.
-(./gradlew help || sleep 10) > /dev/null 2>&1
+if false; then # DO NOT BUILD DURING THE BUILD
+  # Downloading the gradle wrapper sometimes fails.
+  # If so, the next command gets another chance to try the download.
+  (./gradlew help || sleep 10) > /dev/null 2>&1
 
-echo "running \"./gradlew assemble\" for checker-framework"
-./gradlew assemble --console=plain --warning-mode=all -s -Dorg.gradle.internal.http.socketTimeout=60000 -Dorg.gradle.internal.http.connectionTimeout=60000
+  echo "running \"./gradlew assemble\" for checker-framework"
+  ./gradlew assemble --console=plain --warning-mode=all -s -Dorg.gradle.internal.http.socketTimeout=60000 -Dorg.gradle.internal.http.connectionTimeout=60000
+fi
 
 echo Exiting checker/bin-devel/build.sh in "$(pwd)"
