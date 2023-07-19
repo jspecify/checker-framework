@@ -332,7 +332,7 @@ import org.plumelib.util.UtilPlume;
   "showchecks",
 
   // Emit a diagnostic showing the type of each expression whose value is used and each receiver of
-  // an expression, including assignments and method argument slots..
+  // an expression, including assignments and method argument slots.
   // org.checkerframework.common.basetype.BaseTypeVisitor
   "showTypes",
 
