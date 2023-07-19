@@ -331,6 +331,10 @@ import org.plumelib.util.UtilPlume;
   // org.checkerframework.common.basetype.BaseTypeVisitor
   "showchecks",
 
+  // Output all source and sink types
+  // org.checkerframework.common.basetype.BaseTypeVisitor
+  "showTypes",
+
   // Output information about intermediate steps in method type argument inference
   // org.checkerframework.framework.util.typeinference.DefaultTypeArgumentInference
   "showInferenceSteps",
@@ -1958,6 +1962,7 @@ public abstract class SourceChecker extends AbstractTypeProcessor implements Opt
   /** The name of the @SuppressWarnings annotation. */
   private final @CanonicalName String suppressWarningsClassName =
       SuppressWarnings.class.getCanonicalName();
+
   /**
    * Finds the tree that is a {@code @SuppressWarnings} annotation.
    *

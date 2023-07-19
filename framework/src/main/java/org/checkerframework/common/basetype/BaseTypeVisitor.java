@@ -209,28 +209,38 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
   /** The @{@link Deterministic} annotation. */
   protected final AnnotationMirror DETERMINISTIC =
       AnnotationBuilder.fromClass(elements, Deterministic.class);
+
   /** The @{@link SideEffectFree} annotation. */
   protected final AnnotationMirror SIDE_EFFECT_FREE =
       AnnotationBuilder.fromClass(elements, SideEffectFree.class);
+
   /** The @{@link Pure} annotation. */
   protected final AnnotationMirror PURE = AnnotationBuilder.fromClass(elements, Pure.class);
 
   /** The {@code value} element/field of the @java.lang.annotation.Target annotation. */
   protected final ExecutableElement targetValueElement;
+
   /** The {@code when} element/field of the @Unused annotation. */
   protected final ExecutableElement unusedWhenElement;
 
   /** True if "-Ashowchecks" was passed on the command line. */
   private final boolean showchecks;
+
+  /** True if "-AshowTypes" was passed on the command line. */
+  private final boolean showTypes;
+
   /** True if "-Ainfer" was passed on the command line. */
   private final boolean infer;
+
   /** True if "-AsuggestPureMethods" or "-Ainfer" was passed on the command line. */
   private final boolean suggestPureMethods;
+
   /**
    * True if "-AcheckPurityAnnotations" or "-AsuggestPureMethods" or "-Ainfer" was passed on the
    * command line.
    */
   private final boolean checkPurity;
+
   /**
    * True if purity annotations should be inferred. Should be set to false if both the Lock Checker
    * (or some other checker that overrides {@link CFAbstractStore#isSideEffectFree} in a
@@ -268,6 +278,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
     targetValueElement = TreeUtils.getMethod(Target.class, "value", 0, env);
     unusedWhenElement = TreeUtils.getMethod(Unused.class, "when", 0, env);
     showchecks = checker.hasOption("showchecks");
+    showTypes = checker.hasOption("showTypes");
     infer = checker.hasOption("infer");
     suggestPureMethods = checker.hasOption("suggestPureMethods") || infer;
     checkPurity = checker.hasOption("checkPurityAnnotations") || suggestPureMethods;
@@ -1228,6 +1239,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
           return super.visitLocalVariable(localVarExpr, parameters);
         }
       };
+
   /**
    * Check that the parameters used in {@code javaExpression} are effectively final for method
    * {@code method}.
@@ -2587,6 +2599,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
 
   /** Cache to avoid calling {@link #getExceptionParameterLowerBoundAnnotations} more than once. */
   private Set<? extends AnnotationMirror> getExceptionParameterLowerBoundAnnotationsCache = null;
+
   /** The same as {@link #getExceptionParameterLowerBoundAnnotations}, but uses a cache. */
   private Set<? extends AnnotationMirror> getExceptionParameterLowerBoundAnnotationsCached() {
     if (getExceptionParameterLowerBoundAnnotationsCache == null) {
@@ -2848,6 +2861,9 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
           valueType.toString(),
           varType.getKind(),
           varType.toString());
+    }
+    if (showTypes) {
+      checker.reportWarning(valueTree, "sourceType", valueType, valueTree);
     }
   }
 
@@ -3636,19 +3652,25 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
 
     /** The declaration of an overriding method. */
     protected final Tree overriderTree;
+
     /** True if {@link #overriderTree} is a MEMBER_REFERENCE. */
     protected final boolean isMethodReference;
 
     /** The type of the overriding method. */
     protected final AnnotatedExecutableType overrider;
+
     /** The subtype that declares the overriding method. */
     protected final AnnotatedTypeMirror overriderType;
+
     /** The type of the overridden method. */
     protected final AnnotatedExecutableType overridden;
+
     /** The supertype that declares the overridden method. */
     protected final AnnotatedDeclaredType overriddenType;
+
     /** The teturn type of the overridden method. */
     protected final AnnotatedTypeMirror overriddenReturnType;
+
     /** The return type of the overriding method. */
     protected final AnnotatedTypeMirror overriderReturnType;
 
