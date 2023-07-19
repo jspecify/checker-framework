@@ -331,7 +331,8 @@ import org.plumelib.util.UtilPlume;
   // org.checkerframework.common.basetype.BaseTypeVisitor
   "showchecks",
 
-  // Output all source and sink types
+  // Emit a diagnostic showing the type of each expression whose value is used and each receiver of
+  // an expression, including assignments and method argument slots..
   // org.checkerframework.common.basetype.BaseTypeVisitor
   "showTypes",
 
