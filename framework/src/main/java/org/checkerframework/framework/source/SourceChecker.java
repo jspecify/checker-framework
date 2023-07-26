@@ -331,6 +331,11 @@ import org.plumelib.util.UtilPlume;
   // org.checkerframework.common.basetype.BaseTypeVisitor
   "showchecks",
 
+  // Emit a diagnostic showing the type of each expression whose value is used and each receiver of
+  // an expression, including assignments and method argument slots.
+  // org.checkerframework.common.basetype.BaseTypeVisitor
+  "showTypes",
+
   // Output information about intermediate steps in method type argument inference
   // org.checkerframework.framework.util.typeinference.DefaultTypeArgumentInference
   "showInferenceSteps",

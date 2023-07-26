@@ -222,6 +222,8 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
 
   /** True if "-Ashowchecks" was passed on the command line. */
   private final boolean showchecks;
+  /** True if "-AshowTypes" was passed on the command line. */
+  private final boolean showTypes;
   /** True if "-Ainfer" was passed on the command line. */
   private final boolean infer;
   /** True if "-AsuggestPureMethods" or "-Ainfer" was passed on the command line. */
@@ -268,6 +270,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
     targetValueElement = TreeUtils.getMethod(Target.class, "value", 0, env);
     unusedWhenElement = TreeUtils.getMethod(Unused.class, "when", 0, env);
     showchecks = checker.hasOption("showchecks");
+    showTypes = checker.hasOption("showTypes");
     infer = checker.hasOption("infer");
     suggestPureMethods = checker.hasOption("suggestPureMethods") || infer;
     checkPurity = checker.hasOption("checkPurityAnnotations") || suggestPureMethods;
@@ -2848,6 +2851,9 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
           valueType.toString(),
           varType.getKind(),
           varType.toString());
+    }
+    if (showTypes) {
+      checker.reportWarning(valueTree, "sourceType", valueType, valueTree);
     }
   }
 
