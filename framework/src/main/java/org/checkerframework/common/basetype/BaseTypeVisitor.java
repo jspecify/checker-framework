@@ -2798,6 +2798,10 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
       Object... extraArgs) {
 
     commonAssignmentCheckStartDiagnostic(varType, valueType, valueTree);
+    if (showTypes && errorKey.equals("argument")) {
+      checker.reportWarning(
+          valueTree, "sinkType", varType, String.format("%s#%s", extraArgs[1], extraArgs[0]));
+    }
 
     AnnotatedTypeMirror widenedValueType = atypeFactory.getWidenedType(valueType, varType);
     boolean success = atypeFactory.getTypeHierarchy().isSubtype(widenedValueType, varType);
