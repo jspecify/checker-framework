@@ -2036,9 +2036,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
       boolean valid = validateTypeOf(enclosing);
       if (valid) {
         ret = atypeFactory.getMethodReturnType(enclosingMethod, node);
-        if (showTypes) {
-          checker.reportWarning(node, "sinkType", ret, enclosingMethod.getName() + "#return");
-        }
+        reportSinkType(node, ret, enclosingMethod.getName() + "#return");
       }
     } else {
       AnnotatedExecutableType result =
@@ -2741,8 +2739,8 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
     }
 
     commonAssignmentCheck(varType, valueExp, errorKey, extraArgs);
-    if (showTypes && errorKey.equals("assignment")) {
-      checker.reportWarning(valueExp, "sinkType", varType, varTree.toString());
+    if (errorKey.equals("assignment")) {
+      reportSinkType(valueExp, varType, varTree.toString());
     }
   }
 
@@ -2804,9 +2802,8 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
       Object... extraArgs) {
 
     commonAssignmentCheckStartDiagnostic(varType, valueType, valueTree);
-    if (showTypes && errorKey.equals("argument")) {
-      checker.reportWarning(
-          valueTree, "sinkType", varType, String.format("%s#%s", extraArgs[1], extraArgs[0]));
+    if (errorKey.equals("argument")) {
+      reportSinkType(valueTree, varType, String.format("%s#%s", extraArgs[1], extraArgs[0]));
     }
 
     AnnotatedTypeMirror widenedValueType = atypeFactory.getWidenedType(valueType, varType);
@@ -2920,6 +2917,12 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
           valueType.toString(),
           varType.getKind(),
           varType.toString());
+    }
+  }
+
+  private void reportSinkType(Tree node, AnnotatedTypeMirror sinkType, String sinkName) {
+    if (showTypes) {
+      checker.reportWarning(node, "sinkType", sinkType, sinkName);
     }
   }
 
