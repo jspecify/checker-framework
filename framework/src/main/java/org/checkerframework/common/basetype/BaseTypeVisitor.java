@@ -2922,7 +2922,16 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
 
   private void reportSinkType(Tree node, AnnotatedTypeMirror sinkType, String sinkName) {
     if (showTypes) {
-      checker.reportWarning(node, "sinkType", sinkType, sinkName);
+      checker.reportWarning(
+          node,
+          "sinkType",
+          sinkType,
+          /* reportWarning replaces any arguments that are also message keys with the format
+          string from the properties file. To avoid that, we pass an object that is not a String but
+          whose string value is the same. */
+          checker.getMessagesProperties().containsKey(sinkName)
+              ? new StringBuilder(sinkName)
+              : sinkName);
     }
   }
 
