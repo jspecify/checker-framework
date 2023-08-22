@@ -2926,10 +2926,12 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
           node,
           "sinkType",
           sinkType,
-          /* Since "return" is a message key, reportWarning replaces it with the format string
-          from the properties file. To avoid that we need an object that is not a String but
+          /* reportWarning replaces any arguments that are also message keys it with the format
+          string from the properties file. To avoid that we need an object that is not a String but
           whose string value is "return". */
-          sinkName.equals("return") ? new StringBuilder("return") : sinkName);
+          checker.getMessagesProperties().containsKey(sinkName)
+              ? new StringBuilder(sinkName)
+              : sinkName);
     }
   }
 
