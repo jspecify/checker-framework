@@ -2036,7 +2036,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
       boolean valid = validateTypeOf(enclosing);
       if (valid) {
         ret = atypeFactory.getMethodReturnType(enclosingMethod, node);
-        reportSinkType(node, ret, enclosingMethod.getName() + "#return");
+        reportSinkType(node, ret, "return");
       }
     } else {
       AnnotatedExecutableType result =
