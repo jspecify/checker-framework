@@ -32,9 +32,6 @@ ext {
 
     parentDir = file("${rootDir}/../").absolutePath
 
-    annotationTools = "${parentDir}/annotation-tools"
-    afu = "${annotationTools}/annotation-file-utilities"
-
     stubparser = "${parentDir}/stubparser"
     stubparserJar = "${stubparser}/javaparser-core/target/stubparser-3.24.2.jar"
 

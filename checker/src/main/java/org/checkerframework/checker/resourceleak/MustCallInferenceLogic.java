@@ -9,7 +9,6 @@ import java.util.Set;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 import org.checkerframework.checker.mustcall.qual.Owning;
-import org.checkerframework.common.wholeprograminference.WholeProgramInference;
 import org.checkerframework.dataflow.cfg.ControlFlowGraph;
 import org.checkerframework.dataflow.cfg.block.Block;
 import org.checkerframework.dataflow.cfg.block.ConditionalBlock;
@@ -127,16 +126,6 @@ public class MustCallInferenceLogic {
     List<Block> successors = getNormalSuccessors(curBlock);
 
     for (Block b : successors) {
-      // If b is a special block, it must be the regular exit, since we do not propagate to
-      // exceptional successors.
-      if (b.getType() == Block.BlockType.SPECIAL_BLOCK) {
-        WholeProgramInference wpi = typeFactory.getWholeProgramInference();
-        assert wpi != null : "MustCallInference is running without WPI.";
-        for (Element fieldElt : owningFields) {
-          wpi.addFieldDeclarationAnnotation(fieldElt, OWNING);
-        }
-      }
-
       if (visited.add(b)) {
         worklist.add(b);
       }

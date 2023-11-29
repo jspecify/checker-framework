@@ -5,7 +5,6 @@ import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.util.TreePath;
-import com.sun.tools.javac.code.Symbol.ClassSymbol;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -47,7 +46,6 @@ import org.checkerframework.dataflow.cfg.node.MethodInvocationNode;
 import org.checkerframework.dataflow.cfg.node.NarrowingConversionNode;
 import org.checkerframework.dataflow.cfg.node.Node;
 import org.checkerframework.dataflow.cfg.node.NotEqualNode;
-import org.checkerframework.dataflow.cfg.node.ObjectCreationNode;
 import org.checkerframework.dataflow.cfg.node.ReturnNode;
 import org.checkerframework.dataflow.cfg.node.StringConcatenateAssignmentNode;
 import org.checkerframework.dataflow.cfg.node.StringConversionNode;
@@ -63,10 +61,7 @@ import org.checkerframework.dataflow.util.NodeUtils;
 import org.checkerframework.framework.flow.CFAbstractAnalysis.FieldInitialValue;
 import org.checkerframework.framework.type.AnnotatedTypeFactory;
 import org.checkerframework.framework.type.AnnotatedTypeMirror;
-import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedDeclaredType;
-import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedExecutableType;
 import org.checkerframework.framework.type.GenericAnnotatedTypeFactory;
-import org.checkerframework.framework.util.AnnotatedTypes;
 import org.checkerframework.framework.util.Contract;
 import org.checkerframework.framework.util.Contract.ConditionalPostcondition;
 import org.checkerframework.framework.util.Contract.Postcondition;
@@ -106,9 +101,6 @@ public abstract class CFAbstractTransfer<
    */
   protected final boolean sequentialSemantics;
 
-  /** Indicates that the whole-program inference is on. */
-  private final boolean infer;
-
   /**
    * Create a CFAbstractTransfer.
    *
@@ -132,7 +124,6 @@ public abstract class CFAbstractTransfer<
     this.analysis = analysis;
     this.sequentialSemantics =
         !(forceConcurrentSemantics || analysis.checker.hasOption("concurrentSemantics"));
-    this.infer = analysis.checker.hasOption("infer");
   }
 
   /**
@@ -252,28 +243,6 @@ public abstract class CFAbstractTransfer<
       addInitialFieldValues(store, method.getClassTree(), methodDeclTree);
 
       addFinalLocalValues(store, methodElem);
-
-      if (shouldPerformWholeProgramInference(methodDeclTree, methodElem)) {
-        Map<AnnotatedDeclaredType, ExecutableElement> overriddenMethods =
-            AnnotatedTypes.overriddenMethods(
-                analysis.atypeFactory.getElementUtils(), analysis.atypeFactory, methodElem);
-        for (Map.Entry<AnnotatedDeclaredType, ExecutableElement> pair :
-            overriddenMethods.entrySet()) {
-          AnnotatedExecutableType overriddenMethod =
-              AnnotatedTypes.asMemberOf(
-                  analysis.atypeFactory.getProcessingEnv().getTypeUtils(),
-                  analysis.atypeFactory,
-                  pair.getKey(),
-                  pair.getValue());
-
-          // Infers parameter and receiver types of the method based
-          // on the overridden method.
-          analysis
-              .atypeFactory
-              .getWholeProgramInference()
-              .updateFromOverride(methodDeclTree, methodElem, overriddenMethod);
-        }
-      }
 
     } else if (underlyingAST.getKind() == UnderlyingAST.Kind.LAMBDA) {
       // Create a copy and keep only the field values (nothing else applies).
@@ -493,7 +462,7 @@ public abstract class CFAbstractTransfer<
       String stringExpr = p.expressionString;
       AnnotationMirror annotation =
           p.viewpointAdaptDependentTypeAnnotation(
-              analysis.atypeFactory, stringToJavaExpr, /*errorTree=*/ null);
+              analysis.atypeFactory, stringToJavaExpr, /* errorTree= */ null);
       JavaExpression exprJe;
       try {
         // TODO: currently, these expressions are parsed at the declaration (i.e. here) and for
@@ -797,24 +766,6 @@ public abstract class CFAbstractTransfer<
     S store = in.getRegularStore();
     V rhsValue = in.getValueOfSubNode(rhs);
 
-    if (shouldPerformWholeProgramInference(n.getTree(), lhs.getTree())) {
-      // Fields defined in interfaces are LocalVariableNodes with ElementKind of FIELD.
-      if (lhs instanceof FieldAccessNode
-          || (lhs instanceof LocalVariableNode
-              && ((LocalVariableNode) lhs).getElement().getKind() == ElementKind.FIELD)) {
-        // Updates inferred field type
-        analysis.atypeFactory.getWholeProgramInference().updateFromFieldAssignment(lhs, rhs);
-      } else if (lhs instanceof LocalVariableNode
-          && ((LocalVariableNode) lhs).getElement().getKind() == ElementKind.PARAMETER) {
-        // lhs is a formal parameter of some method
-        VariableElement param = (VariableElement) ((LocalVariableNode) lhs).getElement();
-        analysis
-            .atypeFactory
-            .getWholeProgramInference()
-            .updateFromFormalParameterAssignment((LocalVariableNode) lhs, rhs, param);
-      }
-    }
-
     processCommonAssignment(in, lhs, rhs, store, rhsValue);
 
     return new RegularTransferResult<>(finishValue(rhsValue, store), store);
@@ -823,30 +774,6 @@ public abstract class CFAbstractTransfer<
   @Override
   public TransferResult<V, S> visitReturn(ReturnNode n, TransferInput<V, S> p) {
     TransferResult<V, S> result = super.visitReturn(n, p);
-
-    if (shouldPerformWholeProgramInference(n.getTree())) {
-      // Retrieves class containing the method
-      ClassTree classTree = analysis.getContainingClass(n.getTree());
-      // classTree is null e.g. if this is a return statement in a lambda.
-      if (classTree == null) {
-        return result;
-      }
-      ClassSymbol classSymbol = (ClassSymbol) TreeUtils.elementFromTree(classTree);
-
-      ExecutableElement methodElem =
-          TreeUtils.elementFromDeclaration(analysis.getContainingMethod(n.getTree()));
-
-      Map<AnnotatedDeclaredType, ExecutableElement> overriddenMethods =
-          AnnotatedTypes.overriddenMethods(
-              analysis.atypeFactory.getElementUtils(), analysis.atypeFactory, methodElem);
-
-      // Updates the inferred return type of the method
-      analysis
-          .atypeFactory
-          .getWholeProgramInference()
-          .updateFromReturn(
-              n, classSymbol, analysis.getContainingMethod(n.getTree()), overriddenMethods);
-    }
 
     return result;
   }
@@ -870,15 +797,6 @@ public abstract class CFAbstractTransfer<
     // ResultValue is the type of LHS + RHS
     V resultValue = result.getResultValue();
 
-    if (lhs instanceof FieldAccessNode
-        && shouldPerformWholeProgramInference(n.getTree(), lhs.getTree())) {
-      // Updates inferred field type
-      analysis
-          .atypeFactory
-          .getWholeProgramInference()
-          .updateFromFieldAssignment((FieldAccessNode) lhs, rhs);
-    }
-
     processCommonAssignment(in, lhs, rhs, store, resultValue);
 
     return new RegularTransferResult<>(finishValue(resultValue, store), store);
@@ -901,30 +819,11 @@ public abstract class CFAbstractTransfer<
   }
 
   @Override
-  public TransferResult<V, S> visitObjectCreation(ObjectCreationNode n, TransferInput<V, S> p) {
-    if (shouldPerformWholeProgramInference(n.getTree())) {
-      ExecutableElement constructorElt =
-          analysis.getTypeFactory().constructorFromUse(n.getTree()).executableType.getElement();
-      analysis
-          .atypeFactory
-          .getWholeProgramInference()
-          .updateFromObjectCreation(n, constructorElt, p.getRegularStore());
-    }
-    return super.visitObjectCreation(n, p);
-  }
-
-  @Override
   public TransferResult<V, S> visitMethodInvocation(
       MethodInvocationNode n, TransferInput<V, S> in) {
 
     S store = in.getRegularStore();
     ExecutableElement method = n.getTarget().getMethod();
-
-    // Perform WPI before the store has been side-effected.
-    if (shouldPerformWholeProgramInference(n.getTree(), method)) {
-      // Updates the inferred parameter types of the invoked method.
-      analysis.atypeFactory.getWholeProgramInference().updateFromMethodInvocation(n, method, store);
-    }
 
     Tree invocationTree = n.getTree();
 
@@ -979,49 +878,6 @@ public abstract class CFAbstractTransfer<
       }
     }
     return result;
-  }
-
-  /**
-   * Returns true if whole-program inference should be performed. If the tree is in the scope of
-   * a @SuppressWarnings, then this method returns false.
-   *
-   * @param tree a tree
-   * @return whether to perform whole-program inference on the tree
-   */
-  private boolean shouldPerformWholeProgramInference(Tree tree) {
-    @Nullable TreePath path = this.analysis.atypeFactory.getPath(tree);
-    return infer && (tree == null || !analysis.checker.shouldSuppressWarnings(path, ""));
-  }
-
-  /**
-   * Returns true if whole-program inference should be performed. If the expressionTree or lhsTree
-   * is in the scope of a @SuppressWarnings, then this method returns false.
-   *
-   * @param expressionTree the right-hand side of an assignment
-   * @param lhsTree the left-hand side of an assignment
-   * @return whether to perform whole-program inference
-   */
-  private boolean shouldPerformWholeProgramInference(Tree expressionTree, Tree lhsTree) {
-    // Check that infer is true and the tree isn't in scope of a @SuppressWarnings
-    // before calling InternalUtils.symbol(lhs).
-    if (!shouldPerformWholeProgramInference(expressionTree)) {
-      return false;
-    }
-    Element elt = TreeUtils.elementFromTree(lhsTree);
-    return !analysis.checker.shouldSuppressWarnings(elt, "");
-  }
-
-  /**
-   * Returns true if whole-program inference should be performed. If the tree or element is in the
-   * scope of a @SuppressWarnings, then this method returns false.
-   *
-   * @param tree a tree
-   * @param elt its element
-   * @return whether to perform whole-program inference
-   */
-  private boolean shouldPerformWholeProgramInference(Tree tree, Element elt) {
-    return shouldPerformWholeProgramInference(tree)
-        && !analysis.checker.shouldSuppressWarnings(elt, "");
   }
 
   /**
@@ -1090,7 +946,7 @@ public abstract class CFAbstractTransfer<
       // Viewpoint-adapt to the method use (the call site).
       AnnotationMirror anno =
           p.viewpointAdaptDependentTypeAnnotation(
-              analysis.atypeFactory, stringToJavaExpr, /*errorTree=*/ null);
+              analysis.atypeFactory, stringToJavaExpr, /* errorTree= */ null);
 
       String expressionString = p.expressionString;
       try {

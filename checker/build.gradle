@@ -4,9 +4,16 @@ plugins {
 }
 sourceSets {
     main {
+        java {
+            // NO-AFU
+            exclude '**/org/checkerframework/checker/resourceleak/MustCallInference.java'
+        }
         resources {
             // Stub files, message.properties, etc.
             srcDirs += ['src/main/java']
+
+            // NO-AFU
+            exclude '**/org/checkerframework/checker/resourceleak/MustCallInference.java'
         }
     }
     testannotations
@@ -30,11 +37,6 @@ dependencies {
     implementation project(':javacutil')
     implementation project(':dataflow')
     implementation project(':framework')
-    // AFU is an "includedBuild" imported in checker-framework/settings.gradle, so the version number doesn't matter.
-    // https://docs.gradle.org/current/userguide/composite_builds.html#settings_defined_composite
-    implementation('org.checkerframework:annotation-file-utilities:*') {
-        exclude group: 'com.google.errorprone', module: 'javac'
-    }
     implementation project(':checker-qual')
     implementation project(':checker-util')
 
