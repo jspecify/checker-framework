@@ -33,16 +33,6 @@ fi
 # Clone the annotated JDK into ../jdk .
 "$PLUME_SCRIPTS/git-clone-related" typetools jdk
 
-echo "Checking out the annotation-tools commit at which jspecify last merged from upstream."
-git -C "${AT}" checkout -q 7174291c828e88382758e0d5117f99418970f24f
-
-if false; then # DO NOT BUILD DURING THE BUILD
-  echo "Running:  (cd ${AT} && ./.build-without-test.sh)"
-  (cd "${AT}" && ./.build-without-test.sh)
-  echo "... done: (cd ${AT} && ./.build-without-test.sh)"
-fi
-
-
 ## Build stubparser
 "$PLUME_SCRIPTS/git-clone-related" typetools stubparser -q
 
