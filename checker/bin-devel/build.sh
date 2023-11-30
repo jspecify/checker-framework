@@ -39,11 +39,9 @@ fi
 echo "Checking out the stubparser commit at which jspecify last merged from upstream."
 git -C ../stubparser checkout -q dd2c1d4a8b3c428d554d6fab6aa1b840d4031985
 
-if false; then # DO NOT BUILD DURING THE BUILD
-  echo "Running:  (cd ../stubparser/ && ./.build-without-test.sh)"
-  (cd ../stubparser/ && ./.build-without-test.sh)
-  echo "... done: (cd ../stubparser/ && ./.build-without-test.sh)"
-fi
+echo "Running:  (cd ../stubparser/ && ./.build-without-test.sh)"
+(cd ../stubparser/ && ./.build-without-test.sh)
+echo "... done: (cd ../stubparser/ && ./.build-without-test.sh)"
 
 
 ## Build JSpecify, only for the purpose of using its tests.
