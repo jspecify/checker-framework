@@ -26,7 +26,6 @@ import org.checkerframework.checker.mustcall.qual.MustCallAlias;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.checkerframework.common.basetype.BaseTypeChecker;
 import org.checkerframework.dataflow.cfg.ControlFlowGraph;
-import org.checkerframework.dataflow.cfg.UnderlyingAST;
 import org.checkerframework.dataflow.cfg.node.LocalVariableNode;
 import org.checkerframework.dataflow.cfg.node.MethodInvocationNode;
 import org.checkerframework.dataflow.cfg.node.Node;
@@ -117,14 +116,6 @@ public class ResourceLeakAnnotatedTypeFactory extends CalledMethodsAnnotatedType
     MustCallConsistencyAnalyzer mustCallConsistencyAnalyzer =
         new MustCallConsistencyAnalyzer(this, this.analysis);
     mustCallConsistencyAnalyzer.analyze(cfg);
-
-    // Inferring owning annotations for final owning fields
-    if (getWholeProgramInference() != null) {
-      if (cfg.getUnderlyingAST().getKind() == UnderlyingAST.Kind.METHOD) {
-        MustCallInferenceLogic mustCallInferenceLogic = new MustCallInferenceLogic(this, cfg);
-        mustCallInferenceLogic.runInference();
-      }
-    }
 
     super.postAnalyze(cfg);
     tempVarToTree.clear();
@@ -224,6 +215,7 @@ public class ResourceLeakAnnotatedTypeFactory extends CalledMethodsAnnotatedType
     }
     return tempVarToTree.get(node);
   }
+
   /**
    * Registers a temporary variable by adding it to this type factory's tempvar map.
    *
