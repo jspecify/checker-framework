@@ -11,9 +11,6 @@ sourceSets {
         resources {
             // Stub files, message.properties, etc.
             srcDirs += ['src/main/java']
-
-            // NO-AFU
-            exclude '**/org/checkerframework/checker/resourceleak/MustCallInference.java'
         }
     }
     testannotations
