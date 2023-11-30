@@ -83,7 +83,6 @@ import javax.lang.model.type.TypeVariable;
 import javax.lang.model.type.WildcardType;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
-import javax.tools.Diagnostic;
 import org.checkerframework.checker.interning.qual.FindDistinct;
 import org.checkerframework.checker.interning.qual.InternedDistinct;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
@@ -97,10 +96,6 @@ import org.checkerframework.common.reflection.MethodValAnnotatedTypeFactory;
 import org.checkerframework.common.reflection.MethodValChecker;
 import org.checkerframework.common.reflection.ReflectionResolver;
 import org.checkerframework.common.reflection.qual.MethodVal;
-import org.checkerframework.common.wholeprograminference.WholeProgramInference;
-import org.checkerframework.common.wholeprograminference.WholeProgramInferenceImplementation;
-import org.checkerframework.common.wholeprograminference.WholeProgramInferenceJavaParserStorage;
-import org.checkerframework.common.wholeprograminference.WholeProgramInferenceScenesStorage;
 import org.checkerframework.dataflow.qual.SideEffectFree;
 import org.checkerframework.framework.qual.AnnotatedFor;
 import org.checkerframework.framework.qual.EnsuresQualifier;
@@ -151,8 +146,6 @@ import org.checkerframework.javacutil.trees.DetachedVarSymbol;
 import org.plumelib.util.CollectionsPlume;
 import org.plumelib.util.ImmutableTypes;
 import org.plumelib.util.StringsPlume;
-import scenelib.annotations.el.AMethod;
-import scenelib.annotations.el.ATypeElement;
 
 /**
  * The methods of this class take an element or AST node, and return the annotated type as an {@link
@@ -217,45 +210,64 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
 
   /** The AnnotatedFor.value argument/element. */
   private final ExecutableElement annotatedForValueElement;
+
   /** The EnsuresQualifier.expression field/element. */
   final ExecutableElement ensuresQualifierExpressionElement;
+
   /** The EnsuresQualifier.List.value field/element. */
   final ExecutableElement ensuresQualifierListValueElement;
+
   /** The EnsuresQualifierIf.expression field/element. */
   final ExecutableElement ensuresQualifierIfExpressionElement;
+
   /** The EnsuresQualifierIf.result argument/element. */
   final ExecutableElement ensuresQualifierIfResultElement;
+
   /** The EnsuresQualifierIf.List.value field/element. */
   final ExecutableElement ensuresQualifierIfListValueElement;
+
   /** The FieldInvariant.field argument/element. */
   private final ExecutableElement fieldInvariantFieldElement;
+
   /** The FieldInvariant.qualifier argument/element. */
   private final ExecutableElement fieldInvariantQualifierElement;
+
   /** The HasQualifierParameter.value field/element. */
   private final ExecutableElement hasQualifierParameterValueElement;
+
   /** The MethodVal.className argument/element. */
   public final ExecutableElement methodValClassNameElement;
+
   /** The MethodVal.methodName argument/element. */
   public final ExecutableElement methodValMethodNameElement;
+
   /** The MethodVal.params argument/element. */
   public final ExecutableElement methodValParamsElement;
+
   /** The NoQualifierParameter.value field/element. */
   private final ExecutableElement noQualifierParameterValueElement;
+
   /** The RequiresQualifier.expression field/element. */
   final ExecutableElement requiresQualifierExpressionElement;
+
   /** The RequiresQualifier.List.value field/element. */
   final ExecutableElement requiresQualifierListValueElement;
 
   /** The RequiresQualifier type. */
   TypeMirror requiresQualifierTM;
+
   /** The RequiresQualifier.List type. */
   TypeMirror requiresQualifierListTM;
+
   /** The EnsuresQualifier type. */
   TypeMirror ensuresQualifierTM;
+
   /** The EnsuresQualifier.List type. */
   TypeMirror ensuresQualifierListTM;
+
   /** The EnsuresQualifierIf type. */
   TypeMirror ensuresQualifierIfTM;
+
   /** The EnsuresQualifierIf.List type. */
   TypeMirror ensuresQualifierIfListTM;
 
@@ -272,9 +284,6 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
 
   /** Represent the type relations. */
   protected TypeHierarchy typeHierarchy;
-
-  /** Performs whole-program inference. If null, whole-program inference is disabled. */
-  private final @Nullable WholeProgramInference wholeProgramInference;
 
   /**
    * This formatter is used for converting AnnotatedTypeMirrors to Strings. This formatter will be
@@ -344,6 +353,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
 
   /** Map keys are canonical names of aliased annotations. */
   private final Map<@FullyQualifiedName String, Alias> aliases = new HashMap<>();
+
   /**
    * Scans all parts of the {@link AnnotatedTypeMirror} so that all of its fields are initialized.
    */
@@ -368,10 +378,13 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
   private static class Alias {
     /** The canonical annotation (or null if copyElements == true). */
     AnnotationMirror canonical;
+
     /** Whether elements should be copied over when translating to the canonical annotation. */
     boolean copyElements;
+
     /** The canonical annotation name (or null if copyElements == false). */
     @CanonicalName String canonicalName;
+
     /** Which elements should not be copied over (or null if copyElements == false). */
     String[] ignorableElements;
 
@@ -443,12 +456,6 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
 
   /** AnnotationClassLoader used to load type annotation classes via reflective lookup. */
   protected AnnotationClassLoader loader;
-
-  /**
-   * Which whole-program inference output format to use, if doing whole-program inference. This
-   * variable would be final, but it is not set unless WPI is enabled.
-   */
-  public WholeProgramInference.OutputFormat wpiOutputFormat;
 
   /**
    * Should results be cached? This means that ATM.deepCopy() will be called. ATM.deepCopy() used to
@@ -571,47 +578,6 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
     this.typeFormatter = createAnnotatedTypeFormatter();
     this.annotationFormatter = createAnnotationFormatter();
 
-    if (checker.hasOption("infer")) {
-      checkInvalidOptionsInferSignatures();
-      String inferArg = checker.getOption("infer");
-      // No argument means "jaifs", for (temporary) backwards compatibility.
-      if (inferArg == null) {
-        inferArg = "jaifs";
-      }
-      switch (inferArg) {
-        case "stubs":
-          wpiOutputFormat = WholeProgramInference.OutputFormat.STUB;
-          break;
-        case "jaifs":
-          wpiOutputFormat = WholeProgramInference.OutputFormat.JAIF;
-          break;
-        case "ajava":
-          wpiOutputFormat = WholeProgramInference.OutputFormat.AJAVA;
-          break;
-        default:
-          throw new UserError(
-              "Bad argument -Ainfer="
-                  + inferArg
-                  + " should be one of: -Ainfer=jaifs, -Ainfer=stubs, -Ainfer=ajava");
-      }
-      boolean showWpiFailedInferences = checker.hasOption("showWpiFailedInferences");
-      if (wpiOutputFormat == WholeProgramInference.OutputFormat.AJAVA) {
-        wholeProgramInference =
-            new WholeProgramInferenceImplementation<AnnotatedTypeMirror>(
-                this, new WholeProgramInferenceJavaParserStorage(this), showWpiFailedInferences);
-      } else {
-        wholeProgramInference =
-            new WholeProgramInferenceImplementation<ATypeElement>(
-                this, new WholeProgramInferenceScenesStorage(this), showWpiFailedInferences);
-      }
-      if (!checker.hasOption("warns")) {
-        // Without -Awarns, the inference output may be incomplete, because javac halts
-        // after issuing an error.
-        checker.message(Diagnostic.Kind.ERROR, "Do not supply -Ainfer without -Awarns");
-      }
-    } else {
-      wholeProgramInference = null;
-    }
     ignoreUninferredTypeArguments = !checker.hasOption("conservativeUninferredTypeArguments");
 
     objectGetClass = TreeUtils.getMethod("java.lang.Object", "getClass", 0, processingEnv);
@@ -815,15 +781,6 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
     return qualifierUpperBounds;
   }
 
-  /**
-   * Returns the WholeProgramInference instance (may be null).
-   *
-   * @return the WholeProgramInference instance, or null
-   */
-  public WholeProgramInference getWholeProgramInference() {
-    return wholeProgramInference;
-  }
-
   protected void initializeReflectionResolution() {
     if (checker.shouldResolveReflection()) {
       boolean debug = "debug".equals(checker.getOption("resolveReflection"));
@@ -845,15 +802,6 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
    * @param root the new compilation unit to use
    */
   public void setRoot(@Nullable CompilationUnitTree root) {
-    if (root != null && wholeProgramInference != null) {
-      for (Tree typeDecl : root.getTypeDecls()) {
-        if (typeDecl.getKind() == Tree.Kind.CLASS) {
-          ClassTree classTree = (ClassTree) typeDecl;
-          wholeProgramInference.preprocessClassTree(classTree);
-        }
-      }
-    }
-
     this.root = root;
     // Do not clear here. Only the primary checker should clear this cache.
     // treePathCache.clear();
@@ -1296,13 +1244,6 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
   public void postProcessClassTree(ClassTree tree) {
     TypesIntoElements.store(processingEnv, this, tree);
     DeclarationsIntoElements.store(processingEnv, this, tree);
-    if (wholeProgramInference != null) {
-      // Write out the results of whole-program inference, just once for each class.  As soon as any
-      // class is finished processing, all modified scenes are written to files, in case this was
-      // the last class to be processed.  Post-processing of subsequent classes might result in
-      // re-writing some of the scenes if new information has been written to them.
-      wholeProgramInference.writeResultsToFile(wpiOutputFormat, this.checker);
-    }
   }
 
   /**
@@ -2107,8 +2048,10 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
   public static class ParameterizedExecutableType {
     /** The method's/constructor's type. */
     public final AnnotatedExecutableType executableType;
+
     /** The types of the generic type arguments. */
     public final List<AnnotatedTypeMirror> typeArgs;
+
     /** Create a ParameterizedExecutableType. */
     public ParameterizedExecutableType(
         AnnotatedExecutableType executableType, List<AnnotatedTypeMirror> typeArgs) {
@@ -5380,6 +5323,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
 
   /** Matches addition of a constant. */
   static final Pattern plusConstant = Pattern.compile(" *\\+ *(-?[0-9]+)$");
+
   /** Matches subtraction of a constant. */
   static final Pattern minusConstant = Pattern.compile(" *- *(-?[0-9]+)$");
 
@@ -5555,27 +5499,6 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
    *     method
    */
   public void wpiAdjustForUpdateNonField(AnnotatedTypeMirror rhsATM) {}
-
-  /**
-   * Side-effects the method or constructor annotations to make any desired changes before writing
-   * to an annotation file.
-   *
-   * @param methodAnnos the method or constructor annotations to modify
-   */
-  public void prepareMethodForWriting(AMethod methodAnnos) {
-    // This implementation does nothing.
-  }
-
-  /**
-   * Side-effects the method or constructor annotations to make any desired changes before writing
-   * to an ajava file.
-   *
-   * @param methodAnnos the method or constructor annotations to modify
-   */
-  public void prepareMethodForWriting(
-      WholeProgramInferenceJavaParserStorage.CallableDeclarationAnnos methodAnnos) {
-    // This implementation does nothing.
-  }
 
   /**
    * Does {@code anno}, which is an {@link org.checkerframework.framework.qual.AnnotatedFor}
