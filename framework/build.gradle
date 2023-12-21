@@ -223,3 +223,14 @@ task delombok {
 }
 
 tasks.test.dependsOn("delombok")
+
+apply from: rootProject.file("gradle-mvn-push.gradle")
+
+publishing {
+    publications {
+        framework(MavenPublication) {
+            sharedPublicationConfiguration(it)
+            from components.java
+        }
+    }
+}
