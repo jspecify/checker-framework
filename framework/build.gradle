@@ -223,15 +223,3 @@ task delombok {
 }
 
 tasks.test.dependsOn("delombok")
-
-apply from: rootProject.file("gradle-mvn-push.gradle")
-
-publishing {
-    publications {
-        // For publishing to the local Maven repository, so that a local build of the Reference Checker can depend upon it.
-        framework(MavenPublication) {
-            sharedPublicationConfiguration(it)
-            from components.java
-        }
-    }
-}
