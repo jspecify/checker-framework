@@ -32,9 +32,6 @@ ext {
 
     parentDir = file("${rootDir}/../").absolutePath
 
-    stubparser = "${parentDir}/stubparser"
-    stubparserJar = "${stubparser}/javaparser-core/target/stubparser-3.24.2.jar"
-
     jtregHome = "${parentDir}/jtreg"
     formatScriptsHome = "${project(':checker').projectDir}/bin-devel/.run-google-java-format"
     plumeScriptsHome = "${project(':checker').projectDir}/bin-devel/.plume-scripts"
@@ -294,45 +291,6 @@ allprojects {
 task cloneAndBuildDependencies(type: Exec, group: 'Build') {
     description 'Clones (or updates) and builds all dependencies'
     executable 'checker/bin-devel/build.sh'
-}
-
-task maybeCloneAndBuildDependencies() {
-    // No group so it does not show up in the output of `gradlew tasks`
-    description 'Clones (or updates) and builds all dependencies if they are not present.'
-    onlyIf {
-        !file(stubparserJar).exists()
-        // The jdk repository is cloned via the copyAndMinimizeAnnotatedJdkFiles task that is run if
-        // the repository does not exist when building checker.jar.
-    }
-
-    doFirst {
-        if (file(stubparser).exists()) {
-            exec {
-                workingDir stubparser
-                executable 'git'
-                args = ['pull', '-q']
-                ignoreExitValue = true
-            }
-            exec {
-                workingDir stubparser
-                executable "${stubparser}/.build-without-test.sh"
-            }
-        } else {
-            exec {
-                executable 'checker/bin-devel/build.sh'
-            }
-        }
-    }
-    doLast {
-        if (!file(stubparserJar).exists()) {
-            exec {
-                workingDir "${stubparser}/javaparser-core/target"
-                executable 'ls'
-                ignoreExitValue = true
-            }
-            throw new RuntimeException("Can't find stubparser jar: " + stubparserJar)
-        }
-    }
 }
 
 task version(group: 'Documentation') {
