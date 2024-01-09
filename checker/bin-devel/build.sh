@@ -33,16 +33,18 @@ fi
 # Clone the annotated JDK into ../jdk .
 "$PLUME_SCRIPTS/git-clone-related" typetools jdk
 
-## Build stubparser
-"$PLUME_SCRIPTS/git-clone-related" typetools stubparser -q
+# DO NOT BUILD stubparser
+if false; then
+  ## Build stubparser
+  "$PLUME_SCRIPTS/git-clone-related" typetools stubparser -q
 
-echo "Checking out the stubparser commit at which jspecify last merged from upstream."
-git -C ../stubparser checkout -q dd2c1d4a8b3c428d554d6fab6aa1b840d4031985
+  echo "Checking out the stubparser commit at which jspecify last merged from upstream."
+  git -C ../stubparser checkout -q dd2c1d4a8b3c428d554d6fab6aa1b840d4031985
 
-echo "Running:  (cd ../stubparser/ && ./.build-without-test.sh)"
-(cd ../stubparser/ && ./.build-without-test.sh)
-echo "... done: (cd ../stubparser/ && ./.build-without-test.sh)"
-
+  echo "Running:  (cd ../stubparser/ && ./.build-without-test.sh)"
+  (cd ../stubparser/ && ./.build-without-test.sh)
+  echo "... done: (cd ../stubparser/ && ./.build-without-test.sh)"
+fi
 
 # DO NOT CLONE JSPECIFY
 if false; then
